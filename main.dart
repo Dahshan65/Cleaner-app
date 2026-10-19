@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -528,7 +529,7 @@ class _DuplicatesHubState extends State<DuplicatesHub>
         controller: _tabController,
         children: const [
           RealDuplicateScanTab(type: RequestType.image),
-          RealDuplicateScanTab(type: RequestType.image), // يمكن تخصيصها حسب النوع
+          RealDuplicateScanTab(type: RequestType.image),
           RealDuplicateScanTab(type: RequestType.video),
         ],
       ),
@@ -570,7 +571,6 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
         return;
       }
 
-      // جلب أول 60 عنصر للفحص السريع وتجنب الثقل في الذاكرة
       final assets = await paths.first.getAssetListRange(start: 0, end: 60);
       final Map<String, List<AssetEntity>> hashMap = {};
 
@@ -585,11 +585,9 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
         }
       }
 
-      // استخراج العناصر المكررة فقط (التي يتطابق الـ Hash لها أكثر من مرة)
       final List<AssetEntity> foundDuplicates = [];
       hashMap.forEach((key, list) {
         if (list.length > 1) {
-          // نضيف العناصر الزائدة للتنظيف ونترك واحداً أصلياً
           foundDuplicates.addAll(list.sublist(1));
         }
       });
@@ -624,7 +622,6 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
           FilledButton(
             onPressed: () async {
               Navigator.pop(context);
-              // تنفيذ الحذف الفعلي من الجهاز
               await PhotoManager.editor.deleteWithIds(_selectedIds.toList());
               setState(() {
                 _duplicates.removeWhere((item) => _selectedIds.contains(item.id));
@@ -672,44 +669,60 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
               final asset = _duplicates[index];
               final isSelected = _selectedIds.contains(asset.id);
 
-              return CheckboxListTile(
-                secondary: FutureBuilder<Uint8List?>(
-                  future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.done &&
-                        snapshot.data != null) {
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          snapshot.data!,
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
+              return FutureBuilder<File?>(
+                future: asset.file,
+                builder: (context, fileSnapshot) {
+                  return FutureBuilder<int>(
+                    future: fileSnapshot.hasData && fileSnapshot.data != null
+                        ? fileSnapshot.data!.length()
+                        : Future.value(0),
+                    builder: (context, sizeSnapshot) {
+                      final fileSizeMb = (sizeSnapshot.data ?? 0) / (1024 * 1024);
+
+                      return CheckboxListTile(
+                        secondary: FutureBuilder<Uint8List?>(
+                          future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.done &&
+                                snapshot.data != null) {
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(
+                                  snapshot.data!,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                ),
+                              );
+                            }
+                            return Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.image, color: Colors.grey),
+                            );
+                          },
                         ),
+                        title: Text(asset.title ?? '${isAr ? "ملف" : "File"} ${index + 1}'),
+                        subtitle: Text(
+                          '${isAr ? "الحجم" : "Size"}: ${fileSizeMb.toStringAsFixed(2)} MB',
+                        ),
+                        value: isSelected,
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) {
+                              _selectedIds.add(asset.id);
+                            } else {
+                              _selectedIds.remove(asset.id);
+                            }
+                          });
+                        },
                       );
-                    }
-                    return Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.image, color: Colors.grey),
-                    );
-                  },
-                ),
-                title: Text(asset.title ?? '${isAr ? "ملف" : "File"} ${index + 1}'),
-                subtitle: Text('${isAr ? "الحجم" : "Size"}: ${(asset.size / (1024 * 1024)).toStringAsFixed(2)} MB'),
-                value: isSelected,
-                onChanged: (val) {
-                  setState(() {
-                    if (val == true) {
-                      _selectedIds.add(asset.id);
-                    } else {
-                      _selectedIds.remove(asset.id);
-                    }
-                  });
+                    },
+                  );
                 },
               );
             },
