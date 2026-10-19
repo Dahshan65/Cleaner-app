@@ -1,5 +1,5 @@
 name: cleaner_app
-description: "تطبيق منظف الهاتف لتمشيط وحذف الصور والفيديوهات المكررة والكبيرة."
+description: "A phone cleaner app to scan and delete duplicate and large photos and videos."
 publish_to: "none"
 version: 1.0.0+1
 
@@ -10,7 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   photo_manager: ^3.6.0
-  disk_space_plus: ^0.2.6
   crypto: ^3.0.6
 
 dev_dependencies:
