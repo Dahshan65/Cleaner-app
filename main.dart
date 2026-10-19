@@ -469,7 +469,7 @@ class StorageSummary extends StatelessWidget {
   }
 }
 
-// ==================== مركز الملفات المكررة ====================
+// ==================== مركز الملفات المكررة (مع فحص حقيقي MD5) ====================
 class DuplicatesHub extends StatefulWidget {
   const DuplicatesHub({super.key, required this.tab});
   final ValueNotifier<int> tab;
@@ -527,34 +527,94 @@ class _DuplicatesHubState extends State<DuplicatesHub>
       body: TabBarView(
         controller: _tabController,
         children: const [
-          DuplicateListTab(category: 'Identical Photos'),
-          DuplicateListTab(category: 'Screenshots'),
-          DuplicateListTab(category: 'Large Videos'),
+          RealDuplicateScanTab(type: RequestType.image),
+          RealDuplicateScanTab(type: RequestType.image), // يمكن تخصيصها حسب النوع
+          RealDuplicateScanTab(type: RequestType.video),
         ],
       ),
     );
   }
 }
 
-class DuplicateListTab extends StatefulWidget {
-  const DuplicateListTab({super.key, required this.category});
-  final String category;
+class RealDuplicateScanTab extends StatefulWidget {
+  const RealDuplicateScanTab({super.key, required this.type});
+  final RequestType type;
 
   @override
-  State<DuplicateListTab> createState() => _DuplicateListTabState();
+  State<RealDuplicateScanTab> createState() => _RealDuplicateScanTabState();
 }
 
-class _DuplicateListTabState extends State<DuplicateListTab> {
-  final List<bool> _selectedItems = [false, false, false, false];
+class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
+  bool _isLoading = true;
+  List<AssetEntity> _duplicates = [];
+  final Set<String> _selectedIds = {};
 
-  void _deleteSelected() {
+  @override
+  void initState() {
+    super.initState();
+    _scanDuplicates();
+  }
+
+  Future<void> _scanDuplicates() async {
+    setState(() => _isLoading = true);
+    try {
+      final perm = await PhotoManager.requestPermissionExtend();
+      if (!perm.hasAccess) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final paths = await PhotoManager.getAssetPathList(onlyAll: true, type: widget.type);
+      if (paths.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // جلب أول 60 عنصر للفحص السريع وتجنب الثقل في الذاكرة
+      final assets = await paths.first.getAssetListRange(start: 0, end: 60);
+      final Map<String, List<AssetEntity>> hashMap = {};
+
+      for (var asset in assets) {
+        final file = await asset.file;
+        if (file != null) {
+          try {
+            final bytes = await file.readAsBytes();
+            final digest = md5.convert(bytes).toString();
+            hashMap.putIfAbsent(digest, () => []).add(asset);
+          } catch (_) {}
+        }
+      }
+
+      // استخراج العناصر المكررة فقط (التي يتطابق الـ Hash لها أكثر من مرة)
+      final List<AssetEntity> foundDuplicates = [];
+      hashMap.forEach((key, list) {
+        if (list.length > 1) {
+          // نضيف العناصر الزائدة للتنظيف ونترك واحداً أصلياً
+          foundDuplicates.addAll(list.sublist(1));
+        }
+      });
+
+      if (mounted) {
+        setState(() {
+          _duplicates = foundDuplicates;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _deleteSelected() async {
     final isAr = localeNotifier.value.languageCode == 'ar';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(isAr ? 'تأكيد الحذف' : 'Confirm Deletion'),
         content: Text(isAr
-            ? 'هل أنت متأكد من حذف العناصر المحددة من قسم ${widget.category}؟'
+            ? 'هل أنت متأكد من حذف العناصر المحددة نهائياً؟'
             : 'Are you sure you want to delete selected items?'),
         actions: [
           TextButton(
@@ -562,8 +622,15 @@ class _DuplicateListTabState extends State<DuplicateListTab> {
             child: Text(isAr ? 'إلغاء' : 'Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              // تنفيذ الحذف الفعلي من الجهاز
+              await PhotoManager.editor.deleteWithIds(_selectedIds.toList());
+              setState(() {
+                _duplicates.removeWhere((item) => _selectedIds.contains(item.id));
+                _selectedIds.clear();
+              });
+              if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(isAr
@@ -582,32 +649,66 @@ class _DuplicateListTabState extends State<DuplicateListTab> {
   @override
   Widget build(BuildContext context) {
     final isAr = localeNotifier.value.languageCode == 'ar';
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_duplicates.isEmpty) {
+      return Center(
+        child: Text(
+          isAr ? 'لا توجد ملفات مكررة مطابقة' : 'No duplicate files found',
+          style: const TextStyle(fontSize: 16),
+        ),
+      );
+    }
+
     return Column(
       children: [
         Expanded(
           child: ListView.builder(
-            itemCount: 4,
+            itemCount: _duplicates.length,
             itemBuilder: (context, index) {
+              final asset = _duplicates[index];
+              final isSelected = _selectedIds.contains(asset.id);
+
               return CheckboxListTile(
-                secondary: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.image, color: Colors.grey),
+                secondary: FutureBuilder<Uint8List?>(
+                  future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.done &&
+                        snapshot.data != null) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          snapshot.data!,
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                        ),
+                      );
+                    }
+                    return Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.image, color: Colors.grey),
+                    );
+                  },
                 ),
-                title: Text(isAr
-                    ? 'عنصر مكرر رقم ${index + 1}'
-                    : 'Duplicate Item ${index + 1}'),
-                subtitle: Text(isAr
-                    ? 'الحجم: ${(index + 1) * 15} ميجابايت'
-                    : 'Size: ${(index + 1) * 15} MB'),
-                value: _selectedItems[index],
+                title: Text(asset.title ?? '${isAr ? "ملف" : "File"} ${index + 1}'),
+                subtitle: Text('${isAr ? "الحجم" : "Size"}: ${(asset.size / (1024 * 1024)).toStringAsFixed(2)} MB'),
+                value: isSelected,
                 onChanged: (val) {
                   setState(() {
-                    _selectedItems[index] = val ?? false;
+                    if (val == true) {
+                      _selectedIds.add(asset.id);
+                    } else {
+                      _selectedIds.remove(asset.id);
+                    }
                   });
                 },
               );
@@ -620,7 +721,7 @@ class _DuplicateListTabState extends State<DuplicateListTab> {
             width: double.infinity,
             height: 48,
             child: FilledButton.icon(
-              onPressed: _selectedItems.contains(true) ? _deleteSelected : null,
+              onPressed: _selectedIds.isNotEmpty ? _deleteSelected : null,
               icon: const Icon(Icons.delete),
               label: Text(isAr ? 'حذف العناصر المحددة' : 'Delete Selected Items'),
             ),
