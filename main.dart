@@ -8,6 +8,9 @@ import 'package:photo_manager/photo_manager.dart';
 final ValueNotifier<ThemeMode> appThemeMode =
     ValueNotifier<ThemeMode>(ThemeMode.system);
 
+// متحكم عام للغة التطبيق (العربية افتراضياً)
+final ValueNotifier<Locale> appLocale = ValueNotifier<Locale>(const Locale('ar'));
+
 void main() {
   runApp(const CleanerApp());
 }
@@ -20,44 +23,51 @@ class CleanerApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: appThemeMode,
       builder: (context, mode, _) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'منظف الهاتف',
-          locale: const Locale('ar'),
-          builder: (context, child) {
-            return Directionality(
-              textDirection: TextDirection.rtl,
-              child: child!,
+        return ValueListenableBuilder<Locale>(
+          valueListenable: appLocale,
+          builder: (context, locale, _) {
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              title: locale.languageCode == 'ar' ? 'منظف الهاتف' : 'Phone Cleaner',
+              locale: locale,
+              builder: (context, child) {
+                return Directionality(
+                  textDirection: locale.languageCode == 'ar'
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                  child: child!,
+                );
+              },
+              themeMode: mode,
+              theme: ThemeData(
+                useMaterial3: true,
+                colorSchemeSeed: const Color(0xFF2F6FED),
+                brightness: Brightness.light,
+              ),
+              darkTheme: ThemeData(
+                useMaterial3: true,
+                colorSchemeSeed: const Color(0xFF2F6FED),
+                brightness: Brightness.dark,
+              ),
+              home: const RootScreen(),
             );
           },
-          themeMode: mode,
-          theme: ThemeData(
-            useMaterial3: true,
-            colorSchemeSeed: const Color(0xFF2F6FED),
-            brightness: Brightness.light,
-          ),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            colorSchemeSeed: const Color(0xFF2F6FED),
-            brightness: Brightness.dark,
-          ),
-          home: const RootScreen(),
         );
       },
     );
   }
 }
 
-String formatBytes(int bytes) {
+String formatBytes(int bytes, String lang) {
   const gb = 1073741824;
   const mb = 1048576;
   if (bytes >= gb) {
-    return '${(bytes / gb).toStringAsFixed(1)} غيغابايت';
+    return '${(bytes / gb).toStringAsFixed(1)} ${lang == 'ar' ? 'غيغابايت' : 'GB'}';
   }
   if (bytes >= mb) {
-    return '${(bytes / mb).toStringAsFixed(1)} ميغابايت';
+    return '${(bytes / mb).toStringAsFixed(1)} ${lang == 'ar' ? 'ميغابايت' : 'MB'}';
   }
-  return '${(bytes / 1024).round()} كيلوبايت';
+  return '${(bytes / 1024).round()} ${lang == 'ar' ? 'كيلوبايت' : 'KB'}';
 }
 
 String formatDate(DateTime d) {
@@ -104,6 +114,7 @@ class _RootScreenState extends State<RootScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAr = appLocale.value.languageCode == 'ar';
     final pages = <Widget>[
       HomeScreen(
         onOpenDuplicates: _openDuplicates,
@@ -125,22 +136,22 @@ class _RootScreenState extends State<RootScreen> {
             _index = i == 3 ? 4 : i;
           });
         },
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            label: 'الرئيسية',
+            icon: const Icon(Icons.home_outlined),
+            label: isAr ? 'الرئيسية' : 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.content_copy),
-            label: 'المكرر',
+            icon: const Icon(Icons.content_copy),
+            label: isAr ? 'المكرر' : 'Duplicates',
           ),
           NavigationDestination(
-            icon: Icon(Icons.cleaning_services_outlined),
-            label: 'الكبيرة',
+            icon: const Icon(Icons.cleaning_services_outlined),
+            label: isAr ? 'الكبيرة' : 'Large',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: 'الإعدادات',
+            icon: const Icon(Icons.settings_outlined),
+            label: isAr ? 'الإعدادات' : 'Settings',
           ),
         ],
       ),
@@ -216,15 +227,16 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     try {
       final perm = await PhotoManager.requestPermissionExtend();
+      final isAr = appLocale.value.languageCode == 'ar';
       if (!perm.hasAccess) {
         if (!mounted) {
           return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('نحتاج إذن الوصول إلى الصور والفيديو'),
+            content: Text(isAr ? 'نحتاج إذن الوصول إلى الصور والفيديو' : 'Permission needed for photos & videos'),
             action: SnackBarAction(
-              label: 'الإعدادات',
+              label: isAr ? 'الإعدادات' : 'Settings',
               onPressed: PhotoManager.openSetting,
             ),
           ),
@@ -253,10 +265,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isAr = appLocale.value.languageCode == 'ar';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('منظف الهاتف'),
+        title: Text(isAr ? 'منظف الهاتف' : 'Phone Cleaner'),
         centerTitle: false,
       ),
       body: SafeArea(
@@ -282,7 +295,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             )
                           : const Icon(Icons.search),
                       label: Text(
-                        _scanning ? 'جارٍ الفحص…' : 'افحص الآن',
+                        _scanning 
+                            ? (isAr ? 'جارٍ الفحص…' : 'Scanning...') 
+                            : (isAr ? 'افحص الآن' : 'Scan Now'),
                         style: const TextStyle(fontSize: 16),
                       ),
                     ),
@@ -298,30 +313,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       CategoryCard(
                         icon: Icons.content_copy,
-                        title: 'صور مكررة',
-                        subtitle: 'افتح للبحث',
+                        title: isAr ? 'صور مكررة' : 'Duplicate Photos',
+                        subtitle: isAr ? 'افتح للبحث' : 'Tap to search',
                         onTap: () {
                           widget.onOpenDuplicates(0);
                         },
                       ),
                       CategoryCard(
                         icon: Icons.photo_library_outlined,
-                        title: 'صور متشابهة',
-                        subtitle: 'افتح للبحث',
+                        title: isAr ? 'صور متشابهة' : 'Similar Photos',
+                        subtitle: isAr ? 'افتح للبحث' : 'Tap to search',
                         onTap: widget.onOpenSimilar,
                       ),
                       CategoryCard(
                         icon: Icons.videocam_outlined,
-                        title: 'فيديوهات مكررة',
-                        subtitle: 'افتح للبحث',
+                        title: isAr ? 'فيديوهات مكررة' : 'Duplicate Videos',
+                        subtitle: isAr ? 'افتح للبحث' : 'Tap to search',
                         onTap: () {
                           widget.onOpenDuplicates(1);
                         },
                       ),
                       CategoryCard(
                         icon: Icons.sd_storage_outlined,
-                        title: 'ملفات كبيرة',
-                        subtitle: 'افتح للبحث',
+                        title: isAr ? 'ملفات كبيرة' : 'Large Files',
+                        subtitle: isAr ? 'افتح للبحث' : 'Tap to search',
                         onTap: widget.onOpenLarge,
                       ),
                     ],
@@ -332,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
-                'برمجة: وائل دهشان',
+                isAr ? 'برمجة: وائل دهشان' : 'Developer: Wael Dahshan',
                 style: TextStyle(
                   fontSize: 13,
                   color: scheme.onSurfaceVariant,
@@ -363,19 +378,22 @@ class StorageSummary extends StatelessWidget {
     final free = freeMb;
     final total = totalMb;
     final known = free != null && total != null && total > 0;
+    final isAr = appLocale.value.languageCode == 'ar';
+    final lang = isAr ? 'ar' : 'en';
 
     double ratio = 0;
     String percent = '—';
-    String usedText = 'جارٍ قراءة المساحة…';
+    String usedText = isAr ? 'جارٍ قراءة المساحة…' : 'Reading storage...';
     String detailText = '';
 
     if (known) {
       final usedMb = total - free;
       ratio = (usedMb / total).clamp(0.0, 1.0);
       percent = '${(ratio * 100).round()}%';
-      usedText = '${formatBytes((usedMb * 1048576).round())} مستخدمة';
-      detailText =
-          'متبقي ${formatBytes((free * 1048576).round())} من ${formatBytes((total * 1048576).round())}';
+      usedText = '${formatBytes((usedMb * 1048576).round(), lang)} ${isAr ? 'مستخدمة' : 'used'}';
+      detailText = isAr
+          ? 'متبقي ${formatBytes((free * 1048576).round(), lang)} من ${formatBytes((total * 1048576).round(), lang)}'
+          : '${formatBytes((free * 1048576).round(), lang)} free of ${formatBytes((total * 1048576).round(), lang)}';
     }
 
     return Card(
@@ -450,6 +468,7 @@ class MediaSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isAr = appLocale.value.languageCode == 'ar';
 
     return Card(
       elevation: 0,
@@ -460,14 +479,14 @@ class MediaSummary extends StatelessWidget {
           children: [
             Row(
               children: [
-                _stat(context, Icons.image_outlined, 'صورة', images),
-                _stat(context, Icons.videocam_outlined, 'فيديو', videos),
+                _stat(context, Icons.image_outlined, isAr ? 'صورة' : 'Photos', images),
+                _stat(context, Icons.videocam_outlined, isAr ? 'فيديو' : 'Videos', videos),
               ],
             ),
             if (images == null || videos == null) const SizedBox(height: 12),
             if (images == null || videos == null)
               Text(
-                'اضغط «افحص الآن» لمعرفة عدد ملفاتك',
+                isAr ? 'اضغط «افحص الآن» لمعرفة عدد ملفاتك' : 'Tap "Scan Now" to count files',
                 style: textTheme.bodySmall,
               ),
           ],
@@ -571,15 +590,16 @@ class _DuplicatesHubState extends State<DuplicatesHub>
 
   @override
   Widget build(BuildContext context) {
+    final isAr = appLocale.value.languageCode == 'ar';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('المكرر'),
+        title: Text(isAr ? 'المكرر' : 'Duplicates'),
         centerTitle: false,
         bottom: TabBar(
           controller: _controller,
-          tabs: const [
-            Tab(text: 'الصور'),
-            Tab(text: 'الفيديوهات'),
+          tabs: [
+            Tab(text: isAr ? 'الصور' : 'Photos'),
+            Tab(text: isAr ? 'الفيديوهات' : 'Videos'),
           ],
         ),
       ),
@@ -643,9 +663,10 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
     if (_scanning) {
       return;
     }
+    final isAr = appLocale.value.languageCode == 'ar';
     final perm = await PhotoManager.requestPermissionExtend();
     if (!perm.hasAccess) {
-      _msg('نحتاج إذن الوصول إلى الصور والفيديو');
+      _msg(isAr ? 'نحتاج إذن الوصول إلى الصور والفيديو' : 'Permission needed');
       return;
     }
     setState(() {
@@ -655,7 +676,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
       _selected.clear();
       _sizes.clear();
       _progress = null;
-      _status = 'جارٍ تحميل القائمة…';
+      _status = isAr ? 'جارٍ تحميل القائمة…' : 'Loading list...';
     });
 
     try {
@@ -682,7 +703,9 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
         } catch (_) {}
         if (i % 20 == 0 && mounted) {
           setState(() {
-            _status = 'فحص الملفات ${i + 1} من ${assets.length}';
+            _status = isAr
+                ? 'فحص الملفات ${i + 1} من ${assets.length}'
+                : 'Scanning files ${i + 1} of ${assets.length}';
             _progress = (i + 1) / assets.length * 0.5;
           });
         }
@@ -710,7 +733,9 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
         }
         if (mounted) {
           setState(() {
-            _status = 'مقارنة المحتوى ${i + 1} من ${candidates.length}';
+            _status = isAr
+                ? 'مقارنة المحتوى ${i + 1} من ${candidates.length}'
+                : 'Comparing content ${i + 1} of ${candidates.length}';
             _progress = 0.5 + (i + 1) / candidates.length * 0.5;
           });
         }
@@ -723,7 +748,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
       }
       _groups = groups;
     } catch (e) {
-      _msg('حدث خطأ أثناء الفحص');
+      _msg(isAr ? 'حدث خطأ أثناء الفحص' : 'Error during scan');
     } finally {
       if (mounted) {
         setState(() {
@@ -735,6 +760,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
   }
 
   void _toggle(List<AssetEntity> group, AssetEntity asset) {
+    final isAr = appLocale.value.languageCode == 'ar';
     if (_selected.contains(asset.id)) {
       setState(() {
         _selected.remove(asset.id);
@@ -748,7 +774,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
       }
     }
     if (remaining == 0) {
-      _msg('احتفظ بنسخة واحدة على الأقل في كل مجموعة');
+      _msg(isAr ? 'احتفظ بنسخة واحدة على الأقل في كل مجموعة' : 'Keep at least one copy in each group');
       return;
     }
     setState(() {
@@ -757,22 +783,26 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
   }
 
   Future<void> _delete() async {
+    final isAr = appLocale.value.languageCode == 'ar';
+    final lang = isAr ? 'ar' : 'en';
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) {
         return AlertDialog(
-          title: const Text('حذف الملفات المحددة؟'),
+          title: Text(isAr ? 'حذف الملفات المحددة؟' : 'Delete selected files?'),
           content: Text(
-            'عدد الملفات: ${_selected.length}\nسيطلب منك أندرويد تأكيد الحذف.',
+            isAr
+                ? 'عدد الملفات: ${_selected.length}\nسيطلب منك أندرويد تأكيد الحذف.'
+                : 'Files count: ${_selected.length}\nAndroid will ask for deletion confirmation.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('إلغاء'),
+              child: Text(isAr ? 'إلغاء' : 'Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('متابعة'),
+              child: Text(isAr ? 'متابعة' : 'Continue'),
             ),
           ],
         );
@@ -799,13 +829,15 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
       _selected.removeAll(deleted);
       _groups = newGroups;
     });
-    _msg('تم حذف ${deleted.length} ملف');
+    _msg(isAr ? 'تم حذف ${deleted.length} ملف' : '${deleted.length} files deleted');
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final scheme = Theme.of(context).colorScheme;
+    final isAr = appLocale.value.languageCode == 'ar';
+    final lang = isAr ? 'ar' : 'en';
 
     if (_scanning) {
       return Center(
@@ -838,15 +870,15 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
               const SizedBox(height: 16),
               Text(
                 _isVideo
-                    ? 'ابحث عن الفيديوهات المتطابقة تمامًا. قد يستغرق الفحص بعض الوقت.'
-                    : 'ابحث عن الصور المتطابقة تمامًا ووفّر مساحة هاتفك.',
+                    ? (isAr ? 'ابحث عن الفيديوهات المتطابقة تمامًا. قد يستغرق الفحص بعض الوقت.' : 'Find exact duplicate videos. Might take a moment.')
+                    : (isAr ? 'ابحث عن الصور المتطابقة تمامًا ووفّر مساحة هاتفك.' : 'Find exact duplicate photos and free up space.'),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: _scan,
                 icon: const Icon(Icons.search),
-                label: const Text('ابدأ البحث'),
+                label: Text(isAr ? 'ابدأ البحث' : 'Start Scan'),
               ),
             ],
           ),
@@ -867,11 +899,13 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
                 color: scheme.primary,
               ),
               const SizedBox(height: 16),
-              Text(_isVideo ? 'لم نجد فيديوهات مكررة' : 'لم نجد صورًا مكررة'),
+              Text(_isVideo
+                  ? (isAr ? 'لم نجد فيديوهات مكررة' : 'No duplicate videos found')
+                  : (isAr ? 'لم نجد صورًا مكررة' : 'No duplicate photos found')),
               const SizedBox(height: 20),
               OutlinedButton(
                 onPressed: _scan,
-                child: const Text('فحص مرة أخرى'),
+                child: Text(isAr ? 'فحص مرة أخرى' : 'Scan Again'),
               ),
             ],
           ),
@@ -897,7 +931,9 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'مجموعة ${i + 1} · ${g.length} ملفات',
+                        isAr
+                            ? 'مجموعة ${i + 1} · ${g.length} ملفات'
+                            : 'Group ${i + 1} · ${g.length} files',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 8),
@@ -931,7 +967,9 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'تم تحديد ${_selected.length} ملفات · توفير ${formatBytes(_selectedBytes())}',
+                isAr
+                    ? 'تم تحديد ${_selected.length} ملفات · توفير ${formatBytes(_selectedBytes(), lang)}'
+                    : '${_selected.length} files selected · Save ${formatBytes(_selectedBytes(), lang)}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
@@ -945,7 +983,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen>
                   ),
                   onPressed: _selected.isEmpty ? null : _delete,
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('حذف المحدد'),
+                  label: Text(isAr ? 'حذف المحدد' : 'Delete Selected'),
                 ),
               ),
             ],
@@ -992,6 +1030,7 @@ class _DuplicateThumbState extends State<DuplicateThumb> {
     final scheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(8);
     final isVideo = widget.asset.type == AssetType.video;
+    final isAr = appLocale.value.languageCode == 'ar';
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -1067,7 +1106,7 @@ class _DuplicateThumbState extends State<DuplicateThumb> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'احتفظ',
+                    isAr ? 'احتفظ' : 'Keep',
                     style: TextStyle(fontSize: 10, color: scheme.onPrimary),
                   ),
                 ),
@@ -1124,9 +1163,10 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
     if (_scanning) {
       return;
     }
+    final isAr = appLocale.value.languageCode == 'ar';
     final perm = await PhotoManager.requestPermissionExtend();
     if (!perm.hasAccess) {
-      _msg('نحتاج إذن الوصول إلى الصور');
+      _msg(isAr ? 'نحتاج إذن الوصول إلى الصور' : 'Permission needed');
       return;
     }
     setState(() {
@@ -1136,7 +1176,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
       _selected.clear();
       _sizes.clear();
       _progress = null;
-      _status = 'جارٍ تحميل الصور…';
+      _status = isAr ? 'جارٍ تحميل الصور…' : 'Loading images...';
     });
 
     try {
@@ -1166,7 +1206,9 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
 
         if (i % 20 == 0 && mounted) {
           setState(() {
-            _status = 'تحليل الصور ${i + 1} من ${assets.length}';
+            _status = isAr
+                ? 'تحليل الصور ${i + 1} من ${assets.length}'
+                : 'Analyzing images ${i + 1} of ${assets.length}';
             _progress = (i + 1) / assets.length;
           });
         }
@@ -1188,7 +1230,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
 
       _groups = groups;
     } catch (e) {
-      _msg('حدث خطأ أثناء الفحص');
+      _msg(isAr ? 'حدث خطأ أثناء الفحص' : 'Error during scan');
     } finally {
       if (mounted) {
         setState(() {
@@ -1200,6 +1242,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
   }
 
   void _toggle(List<AssetEntity> group, AssetEntity asset) {
+    final isAr = appLocale.value.languageCode == 'ar';
     if (_selected.contains(asset.id)) {
       setState(() {
         _selected.remove(asset.id);
@@ -1213,7 +1256,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
       }
     }
     if (remaining == 0) {
-      _msg('احتفظ بنسخة واحدة على الأقل في كل مجموعة');
+      _msg(isAr ? 'احتفظ بنسخة واحدة على الأقل في كل مجموعة' : 'Keep at least one copy in each group');
       return;
     }
     setState(() {
@@ -1222,22 +1265,25 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
   }
 
   Future<void> _delete() async {
+    final isAr = appLocale.value.languageCode == 'ar';
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) {
         return AlertDialog(
-          title: const Text('حذف الصور المحددة؟'),
+          title: Text(isAr ? 'حذف الصور المحددة؟' : 'Delete selected images?'),
           content: Text(
-            'عدد الصور: ${_selected.length}\nسيطلب منك أندرويد تأكيد الحذف.',
+            isAr
+                ? 'عدد الصور: ${_selected.length}\nسيطلب منك أندرويد تأكيد الحذف.'
+                : 'Images count: ${_selected.length}\nAndroid will ask for confirmation.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('إلغاء'),
+              child: Text(isAr ? 'إلغاء' : 'Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('متابعة'),
+              child: Text(isAr ? 'متابعة' : 'Continue'),
             ),
           ],
         );
@@ -1264,17 +1310,19 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
       _selected.removeAll(deleted);
       _groups = newGroups;
     });
-    _msg('تم حذف ${deleted.length} صورة');
+    _msg(isAr ? 'تم حذف ${deleted.length} صورة' : '${deleted.length} images deleted');
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final scheme = Theme.of(context).colorScheme;
+    final isAr = appLocale.value.languageCode == 'ar';
+    final lang = isAr ? 'ar' : 'en';
 
     if (_scanning) {
       return Scaffold(
-        appBar: AppBar(title: const Text('صور متشابهة')),
+        appBar: AppBar(title: Text(isAr ? 'صور متشابهة' : 'Similar Photos')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -1293,7 +1341,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
 
     if (!_scanned) {
       return Scaffold(
-        appBar: AppBar(title: const Text('صور متشابهة')),
+        appBar: AppBar(title: Text(isAr ? 'صور متشابهة' : 'Similar Photos')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -1306,15 +1354,17 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
                   color: scheme.primary,
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'ابحث عن الصور المتقاربة والمتشابهة في التوقيت والمحتوى لتنظيفها.',
+                Text(
+                  isAr
+                      ? 'ابحث عن الصور المتقاربة والمتشابهة في التوقيت والمحتوى لتنظيفها.'
+                      : 'Find similar and close-timed photos to clean up.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: _scan,
                   icon: const Icon(Icons.search),
-                  label: const Text('ابدأ البحث'),
+                  label: Text(isAr ? 'ابدأ البحث' : 'Start Scan'),
                 ),
               ],
             ),
@@ -1325,7 +1375,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
 
     if (_groups.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('صور متشابهة')),
+        appBar: AppBar(title: Text(isAr ? 'صور متشابهة' : 'Similar Photos')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -1338,11 +1388,11 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
                   color: scheme.primary,
                 ),
                 const SizedBox(height: 16),
-                const Text('لم نجد صورًا متشابهة'),
+                Text(isAr ? 'لم نجد صورًا متشابهة' : 'No similar photos found'),
                 const SizedBox(height: 20),
                 OutlinedButton(
                   onPressed: _scan,
-                  child: const Text('فحص مرة أخرى'),
+                  child: Text(isAr ? 'فحص مرة أخرى' : 'Scan Again'),
                 ),
               ],
             ),
@@ -1352,7 +1402,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('صور متشابهة')),
+      appBar: AppBar(title: Text(isAr ? 'صور متشابهة' : 'Similar Photos')),
       body: Column(
         children: [
           Expanded(
@@ -1371,7 +1421,9 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'مجموعة تقارب ${i + 1} · ${g.length} صور',
+                          isAr
+                              ? 'مجموعة تقارب ${i + 1} · ${g.length} صور'
+                              : 'Similar group ${i + 1} · ${g.length} photos',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 8),
@@ -1405,7 +1457,9 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'تم تحديد ${_selected.length} صور · توفير ${formatBytes(_selectedBytes())}',
+                  isAr
+                      ? 'تم تحديد ${_selected.length} صور · توفير ${formatBytes(_selectedBytes(), lang)}'
+                      : '${_selected.length} photos selected · Save ${formatBytes(_selectedBytes(), lang)}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -1419,7 +1473,7 @@ class _SimilarImagesScreenState extends State<SimilarImagesScreen>
                     ),
                     onPressed: _selected.isEmpty ? null : _delete,
                     icon: const Icon(Icons.delete_outline),
-                    label: const Text('حذف المحدد'),
+                    label: Text(isAr ? 'حذف المحدد' : 'Delete Selected'),
                   ),
                 ),
               ],
@@ -1488,9 +1542,10 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
     if (_scanning) {
       return;
     }
+    final isAr = appLocale.value.languageCode == 'ar';
     final perm = await PhotoManager.requestPermissionExtend();
     if (!perm.hasAccess) {
-      _msg('نحتاج إذن الوصول إلى الصور والفيديو');
+      _msg(isAr ? 'نحتاج إذن الوصول إلى الصور والفيديو' : 'Permission needed');
       return;
     }
     setState(() {
@@ -1500,7 +1555,7 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
       _sizes.clear();
       _selected.clear();
       _progress = null;
-      _status = 'جارٍ تحميل القائمة…';
+      _status = isAr ? 'جارٍ تحميل القائمة…' : 'Loading list...';
     });
 
     try {
@@ -1525,7 +1580,9 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
         } catch (_) {}
         if (i % 20 == 0 && mounted) {
           setState(() {
-            _status = 'فحص الملفات ${i + 1} من ${assets.length}';
+            _status = isAr
+                ? 'فحص الملفات ${i + 1} من ${assets.length}'
+                : 'Scanning files ${i + 1} of ${assets.length}';
             _progress = (i + 1) / assets.length;
           });
         }
@@ -1538,7 +1595,7 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
       _sizes.addAll(sizes);
       _items = top;
     } catch (e) {
-      _msg('حدث خطأ أثناء الفحص');
+      _msg(isAr ? 'حدث خطأ أثناء الفحص' : 'Error during scan');
     } finally {
       if (mounted) {
         setState(() {
@@ -1560,24 +1617,26 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
   }
 
   Future<void> _delete() async {
+    final isAr = appLocale.value.languageCode == 'ar';
+    final lang = isAr ? 'ar' : 'en';
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) {
         return AlertDialog(
-          title: const Text('حذف الملفات المحددة؟'),
+          title: Text(isAr ? 'حذف الملفات المحددة؟' : 'Delete selected files?'),
           content: Text(
-            'عدد الملفات: ${_selected.length}\n'
-            'المساحة: ${formatBytes(_selectedBytes())}\n'
-            'سيطلب منك أندرويد تأكيد الحذف.',
+            isAr
+                ? 'عدد الملفات: ${_selected.length}\nالمساحة: ${formatBytes(_selectedBytes(), lang)}\nسيطلب منك أندرويد تأكيد الحذف.'
+                : 'Files: ${_selected.length}\nSize: ${formatBytes(_selectedBytes(), lang)}\nAndroid will ask for confirmation.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(c, false),
-              child: const Text('إلغاء'),
+              child: Text(isAr ? 'إلغاء' : 'Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(c, true),
-              child: const Text('متابعة'),
+              child: Text(isAr ? 'متابعة' : 'Continue'),
             ),
           ],
         );
@@ -1597,23 +1656,24 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
       _items = _items.where((a) => !deleted.contains(a.id)).toList();
       _selected.removeAll(deleted);
     });
-    _msg('تم حذف ${deleted.length} ملف');
+    _msg(isAr ? 'تم حذف ${deleted.length} ملف' : '${deleted.length} files deleted');
   }
 
   Widget _typeSwitch() {
+    final isAr = appLocale.value.languageCode == 'ar';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: SegmentedButton<bool>(
-        segments: const [
+        segments: [
           ButtonSegment<bool>(
             value: true,
-            icon: Icon(Icons.videocam_outlined),
-            label: Text('فيديوهات'),
+            icon: const Icon(Icons.videocam_outlined),
+            label: Text(isAr ? 'فيديوهات' : 'Videos'),
           ),
           ButtonSegment<bool>(
             value: false,
-            icon: Icon(Icons.image_outlined),
-            label: Text('صور'),
+            icon: const Icon(Icons.image_outlined),
+            label: Text(isAr ? 'صور' : 'Photos'),
           ),
         ],
         selected: {_videos},
@@ -1625,6 +1685,9 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
   }
 
   Widget _body(ColorScheme scheme) {
+    final isAr = appLocale.value.languageCode == 'ar';
+    final lang = isAr ? 'ar' : 'en';
+
     if (_scanning) {
       return Center(
         child: Padding(
@@ -1652,15 +1715,15 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
               const SizedBox(height: 16),
               Text(
                 _videos
-                    ? 'اعرض أكبر الفيديوهات حجمًا لتحذف ما لا تحتاجه.'
-                    : 'اعرض أكبر الصور حجمًا لتحذف ما لا تحتاجه.',
+                    ? (isAr ? 'اعرض أكبر الفيديوهات حجمًا لتحذف ما لا تحتاجه.' : 'View largest videos to clean up space.')
+                    : (isAr ? 'اعرض أكبر الصور حجمًا لتحذف ما لا تحتاجه.' : 'View largest photos to clean up space.'),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: _scan,
                 icon: const Icon(Icons.search),
-                label: const Text('ابدأ البحث'),
+                label: Text(isAr ? 'ابدأ البحث' : 'Start Scan'),
               ),
             ],
           ),
@@ -1681,11 +1744,11 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
                 color: scheme.primary,
               ),
               const SizedBox(height: 16),
-              const Text('لا توجد ملفات'),
+              Text(isAr ? 'لا توجد ملفات' : 'No files found'),
               const SizedBox(height: 20),
               OutlinedButton(
                 onPressed: _scan,
-                child: const Text('فحص مرة أخرى'),
+                child: Text(isAr ? 'فحص مرة أخرى' : 'Scan Again'),
               ),
             ],
           ),
@@ -1722,7 +1785,7 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                formatBytes(_sizes[a.id] ?? 0),
+                                formatBytes(_sizes[a.id] ?? 0, lang),
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                               const SizedBox(height: 2),
@@ -1755,7 +1818,9 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'تم تحديد ${_selected.length} ملفات · توفير ${formatBytes(_selectedBytes())}',
+                isAr
+                    ? 'تم تحديد ${_selected.length} ملفات · توفير ${formatBytes(_selectedBytes(), lang)}'
+                    : '${_selected.length} files selected · Save ${formatBytes(_selectedBytes(), lang)}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
@@ -1769,7 +1834,7 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
                   ),
                   onPressed: _selected.isEmpty ? null : _delete,
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('حذف المحدد'),
+                  label: Text(isAr ? 'حذف المحدد' : 'Delete Selected'),
                 ),
               ),
             ],
@@ -1782,9 +1847,10 @@ class _LargeFilesScreenState extends State<LargeFilesScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isAr = appLocale.value.languageCode == 'ar';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الملفات الكبيرة'),
+        title: Text(isAr ? 'الملفات الكبيرة' : 'Large Files'),
         centerTitle: false,
       ),
       body: SafeArea(
@@ -1871,7 +1937,7 @@ class _ThumbBoxState extends State<ThumbBox> {
 }
 
 // ---------------------------------------------------------------------------
-// الإعدادات
+// الإعدادات (مع زر تبديل اللغة)
 // ---------------------------------------------------------------------------
 
 class SettingsScreen extends StatelessWidget {
@@ -1881,34 +1947,61 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isAr = appLocale.value.languageCode == 'ar';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الإعدادات'),
+        title: Text(isAr ? 'الإعدادات' : 'Settings'),
         centerTitle: false,
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('المظهر', style: textTheme.titleSmall),
+            // قسم اللغة
+            Text(isAr ? 'لغة التطبيق' : 'App Language', style: textTheme.titleSmall),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<Locale>(
+              valueListenable: appLocale,
+              builder: (context, locale, _) {
+                return SegmentedButton<Locale>(
+                  segments: const [
+                    ButtonSegment<Locale>(
+                      value: Locale('ar'),
+                      label: Text('العربية'),
+                    ),
+                    ButtonSegment<Locale>(
+                      value: Locale('en'),
+                      label: Text('English'),
+                    ),
+                  ],
+                  selected: {locale},
+                  onSelectionChanged: (s) {
+                    appLocale.value = s.first;
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            // قسم المظهر
+            Text(isAr ? 'المظهر' : 'Theme', style: textTheme.titleSmall),
             const SizedBox(height: 8),
             ValueListenableBuilder<ThemeMode>(
               valueListenable: appThemeMode,
               builder: (context, mode, _) {
                 return SegmentedButton<ThemeMode>(
-                  segments: const [
+                  segments: [
                     ButtonSegment<ThemeMode>(
                       value: ThemeMode.system,
-                      label: Text('تلقائي'),
+                      label: Text(isAr ? 'تلقائي' : 'System'),
                     ),
                     ButtonSegment<ThemeMode>(
                       value: ThemeMode.light,
-                      label: Text('فاتح'),
+                      label: Text(isAr ? 'فاتح' : 'Light'),
                     ),
                     ButtonSegment<ThemeMode>(
                       value: ThemeMode.dark,
-                      label: Text('داكن'),
+                      label: Text(isAr ? 'داكن' : 'Dark'),
                     ),
                   ],
                   selected: {mode},
@@ -1919,30 +2012,30 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             const SizedBox(height: 24),
-            Text('الأذونات', style: textTheme.titleSmall),
+            Text(isAr ? 'الأذونات' : 'Permissions', style: textTheme.titleSmall),
             const SizedBox(height: 8),
             Card(
               elevation: 0,
               color: scheme.surfaceContainerHighest,
               child: ListTile(
                 leading: Icon(Icons.lock_open_outlined, color: scheme.primary),
-                title: const Text('إذن الصور والفيديو'),
-                subtitle: const Text('افتح إعدادات النظام لتغيير الإذن'),
+                title: Text(isAr ? 'إذن الصور والفيديو' : 'Photos & Videos Permission'),
+                subtitle: Text(isAr ? 'افتح إعدادات النظام لتغيير الإذن' : 'Open system settings to change'),
                 onTap: () {
                   PhotoManager.openSetting();
                 },
               ),
             ),
             const SizedBox(height: 24),
-            Text('حول التطبيق', style: textTheme.titleSmall),
+            Text(isAr ? 'حول التطبيق' : 'About App', style: textTheme.titleSmall),
             const SizedBox(height: 8),
             Card(
               elevation: 0,
               color: scheme.surfaceContainerHighest,
-              child: const ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('منظف الهاتف'),
-                subtitle: Text('برمجة: وائل دهشان'),
+              child: ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(isAr ? 'منظف الهاتف' : 'Phone Cleaner'),
+                subtitle: Text(isAr ? 'برمجة: وائل دهشان' : 'Developer: Wael Dahshan'),
               ),
             ),
           ],
