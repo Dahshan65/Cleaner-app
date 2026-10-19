@@ -5,7 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-// متغيرات عامة للتحكم في ثيم التطبيق
+// متغير عام للتحكم في ثيم التطبيق
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 
 void main() => runApp(const CleanerApp());
@@ -663,15 +663,17 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
             },
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: _selectedIds.isNotEmpty ? _deleteSelected : null,
-              icon: const Icon(Icons.delete),
-              label: const Text('Delete Selected Items'),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _selectedIds.isNotEmpty ? _deleteSelected : null,
+                icon: const Icon(Icons.delete),
+                label: const Text('Delete Selected Items'),
+              ),
             ),
           ),
         ),
