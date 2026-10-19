@@ -15,7 +15,10 @@ jobs:
           channel: stable
 
       - name: Generate Android project
-        run: flutter create --project-name cleaner_app --platforms=android .
+        run: |
+          flutter create --project-name cleaner_app --platforms=android .
+          # حل مشكلة تضارب ملفات البناء في أندرويد
+          rm -f android/build.gradle
 
       - name: Add packages
         run: flutter pub add photo_manager crypto
