@@ -18,7 +18,7 @@ jobs:
         run: flutter create --project-name cleaner_app --platforms=android .
 
       - name: Add packages
-        run: flutter pub add photo_manager crypto disk_space_plus
+        run: flutter pub add photo_manager crypto
 
       - name: Add Android permissions
         run: |
