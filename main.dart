@@ -41,12 +41,24 @@ class RootScreen extends StatefulWidget {
 
 class _RootScreenState extends State<RootScreen> {
   int _index = 0;
+  final ValueNotifier<int> _dupTab = ValueNotifier<int>(0);
+
+  @override
+  void dispose() {
+    _dupTab.dispose();
+    super.dispose();
+  }
+
+  void _openDuplicates(int tab) {
+    _dupTab.value = tab;
+    setState(() => _index = 1);
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      HomeScreen(onOpenDuplicates: () => setState(() => _index = 1)),
-      const DuplicatesScreen(),
+      HomeScreen(onOpenDuplicates: _openDuplicates),
+      DuplicatesHub(tab: _dupTab),
       const _ComingSoon(
         icon: Icons.cleaning_services_outlined,
         title: 'التنظيف',
@@ -114,7 +126,7 @@ class _ComingSoon extends StatelessWidget {
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onOpenDuplicates});
 
-  final VoidCallback onOpenDuplicates;
+  final ValueChanged<int> onOpenDuplicates;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -245,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: Icons.content_copy,
                         title: 'صور مكررة',
                         size: 'افتح للبحث',
-                        onTap: widget.onOpenDuplicates,
+                        onTap: () => widget.onOpenDuplicates(0),
                       ),
                       _CategoryCard(
                         icon: Icons.photo_library_outlined,
@@ -256,8 +268,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       _CategoryCard(
                         icon: Icons.videocam_outlined,
                         title: 'فيديوهات مكررة',
-                        size: 'قريبًا',
-                        onTap: _soon,
+                        size: 'افتح للبحث',
+                        onTap: () => widget.onOpenDuplicates(1),
                       ),
                       _CategoryCard(
                         icon: Icons.cleaning_services_outlined,
@@ -389,14 +401,85 @@ class _CategoryCard extends StatelessWidget {
   }
 }
 
+class DuplicatesHub extends StatefulWidget {
+  const DuplicatesHub({super.key, required this.tab});
+
+  final ValueNotifier<int> tab;
+
+  @override
+  State<DuplicatesHub> createState() => _DuplicatesHubState();
+}
+
+class _DuplicatesHubState extends State<DuplicatesHub>
+    with SingleTickerProviderStateMixin {
+  late final TabController _controller =
+      TabController(length: 2, vsync: this);
+
+  void _syncFromNotifier() {
+    if (_controller.index != widget.tab.value) {
+      _controller.animateTo(widget.tab.value);
+    }
+  }
+
+  void _syncToNotifier() {
+    if (!_controller.indexIsChanging) {
+      widget.tab.value = _controller.index;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.tab.addListener(_syncFromNotifier);
+    _controller.addListener(_syncToNotifier);
+  }
+
+  @override
+  void dispose() {
+    widget.tab.removeListener(_syncFromNotifier);
+    _controller.removeListener(_syncToNotifier);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('المكرر'),
+        centerTitle: false,
+        bottom: TabBar(
+          controller: _controller,
+          tabs: const [
+            Tab(text: 'الصور'),
+            Tab(text: 'الفيديوهات'),
+          ],
+        ),
+      ),
+      body: SafeArea(
+        child: TabBarView(
+          controller: _controller,
+          children: const [
+            DuplicatesScreen(type: RequestType.image),
+            DuplicatesScreen(type: RequestType.video),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class DuplicatesScreen extends StatefulWidget {
-  const DuplicatesScreen({super.key});
+  const DuplicatesScreen({super.key, required this.type});
+
+  final RequestType type;
 
   @override
   State<DuplicatesScreen> createState() => _DuplicatesScreenState();
 }
 
-class _DuplicatesScreenState extends State<DuplicatesScreen> {
+class _DuplicatesScreenState extends State<DuplicatesScreen>
+    with AutomaticKeepAliveClientMixin {
   bool _scanning = false;
   bool _scanned = false;
   String _status = '';
@@ -404,6 +487,11 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
   List<List<AssetEntity>> _groups = [];
   final Set<String> _selected = {};
   final Map<String, int> _sizes = {};
+
+  @override
+  bool get wantKeepAlive => true;
+
+  bool get _isVideo => widget.type == RequestType.video;
 
   void _msg(String text) {
     if (!mounted) return;
@@ -423,374 +511,3 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
   }
 
   int get _selectedBytes =>
-      _selected.fold<int>(0, (sum, id) => sum + (_sizes[id] ?? 0));
-
-  Future<void> _scan() async {
-    if (_scanning) return;
-    final perm = await PhotoManager.requestPermissionExtend();
-    if (!perm.hasAccess) {
-      _msg('نحتاج إذن الوصول إلى الصور');
-      return;
-    }
-    setState(() {
-      _scanning = true;
-      _scanned = false;
-      _groups = [];
-      _selected.clear();
-      _sizes.clear();
-      _progress = null;
-      _status = 'جارٍ تحميل قائمة الصور…';
-    });
-
-    try {
-      final paths = await PhotoManager.getAssetPathList(
-        onlyAll: true,
-        type: RequestType.image,
-      );
-      final List<AssetEntity> assets;
-      if (paths.isEmpty) {
-        assets = [];
-      } else {
-        final count = await paths.first.assetCountAsync;
-        assets = await paths.first.getAssetListRange(start: 0, end: count);
-      }
-
-      final bySize = <int, List<AssetEntity>>{};
-      for (var i = 0; i < assets.length; i++) {
-        final file = await assets[i].originFile;
-        if (file != null) {
-          final len = await file.length();
-          _sizes[assets[i].id] = len;
-          bySize.putIfAbsent(len, () => []).add(assets[i]);
-        }
-        if (i % 20 == 0 && mounted) {
-          setState(() {
-            _status = 'فحص الملفات ${i + 1} من ${assets.length}';
-            _progress = (i + 1) / assets.length * 0.5;
-          });
-        }
-      }
-
-      final candidates = bySize.values.where((l) => l.length > 1).toList();
-      final groups = <List<AssetEntity>>[];
-      for (var i = 0; i < candidates.length; i++) {
-        final byHash = <String, List<AssetEntity>>{};
-        for (final a in candidates[i]) {
-          final file = await a.originFile;
-          if (file == null) continue;
-          final digest = md5.convert(await file.readAsBytes()).toString();
-          byHash.putIfAbsent(digest, () => []).add(a);
-        }
-        for (final g in byHash.values) {
-          if (g.length > 1) {
-            g.sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
-            groups.add(g);
-          }
-        }
-        if (mounted) {
-          setState(() {
-            _status = 'مقارنة المحتوى ${i + 1} من ${candidates.length}';
-            _progress = 0.5 + (i + 1) / candidates.length * 0.5;
-          });
-        }
-      }
-
-      for (final g in groups) {
-        for (var k = 1; k < g.length; k++) {
-          _selected.add(g[k].id);
-        }
-      }
-      _groups = groups;
-    } catch (e) {
-      _msg('حدث خطأ أثناء الفحص');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _scanning = false;
-          _scanned = true;
-        });
-      }
-    }
-  }
-
-  void _toggle(List<AssetEntity> group, AssetEntity asset) {
-    if (_selected.contains(asset.id)) {
-      setState(() => _selected.remove(asset.id));
-      return;
-    }
-    final remaining = group
-        .where((x) => x.id != asset.id && !_selected.contains(x.id))
-        .length;
-    if (remaining == 0) {
-      _msg('احتفظ بصورة واحدة على الأقل في كل مجموعة');
-      return;
-    }
-    setState(() => _selected.add(asset.id));
-  }
-
-  Future<void> _delete() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('حذف الصور المحددة؟'),
-        content: Text(
-          'عدد الصور: ${_selected.length}\nسيطلب منك أندرويد تأكيد الحذف.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text('متابعة'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    final deleted = await PhotoManager.editor.deleteWithIds(_selected.toList());
-    if (!mounted) return;
-    setState(() {
-      _selected.removeAll(deleted);
-      _groups = _groups
-          .map((g) => g.where((a) => !deleted.contains(a.id)).toList())
-          .where((g) => g.length > 1)
-          .toList();
-    });
-    _msg('تم حذف ${deleted.length} ملف');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('الصور المكررة'), centerTitle: false),
-      body: SafeArea(child: _body(context)),
-    );
-  }
-
-  Widget _body(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    if (_scanning) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              LinearProgressIndicator(value: _progress),
-              const SizedBox(height: 16),
-              Text(_status),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (!_scanned) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.content_copy, size: 56, color: scheme.primary),
-              const SizedBox(height: 16),
-              const Text(
-                'ابحث عن الصور المتطابقة تمامًا ووفّر مساحة هاتفك.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: _scan,
-                icon: const Icon(Icons.search),
-                label: const Text('ابدأ البحث'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_groups.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle_outline, size: 56, color: scheme.primary),
-              const SizedBox(height: 16),
-              const Text('لم نجد صورًا مكررة'),
-              const SizedBox(height: 20),
-              OutlinedButton(
-                onPressed: _scan,
-                child: const Text('فحص مرة أخرى'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _groups.length,
-            itemBuilder: (context, i) {
-              final g = _groups[i];
-              return Card(
-                elevation: 0,
-                color: scheme.surfaceContainerHighest,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('مجموعة ${i + 1} · ${g.length} صور',
-                          style: Theme.of(context).textTheme.bodySmall),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: g
-                            .map((a) => _Thumb(
-                                  key: ValueKey(a.id),
-                                  asset: a,
-                                  selected: _selected.contains(a.id),
-                                  onTap: () => _toggle(g, a),
-                                ))
-                            .toList(),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            border: Border(top: BorderSide(color: scheme.outlineVariant)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'تم تحديد ${_selected.length} ملفات · توفير ${_fmt(_selectedBytes)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: scheme.error,
-                    foregroundColor: scheme.onError,
-                  ),
-                  onPressed: _selected.isEmpty ? null : _delete,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('حذف المحدد'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Thumb extends StatefulWidget {
-  const _Thumb({
-    super.key,
-    required this.asset,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final AssetEntity asset;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_Thumb> createState() => _ThumbState();
-}
-
-class _ThumbState extends State<_Thumb> {
-  late final Future<Uint8List?> _future =
-      widget.asset.thumbnailDataWithSize(const ThumbnailSize(200, 200));
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(8);
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: SizedBox(
-        width: 96,
-        height: 96,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ClipRRect(
-              borderRadius: radius,
-              child: FutureBuilder<Uint8List?>(
-                future: _future,
-                builder: (context, snap) {
-                  final data = snap.data;
-                  if (data == null) {
-                    return Container(color: scheme.surface);
-                  }
-                  return Image.memory(data, fit: BoxFit.cover);
-                },
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                border: Border.all(
-                  color: widget.selected ? scheme.error : scheme.primary,
-                  width: 2.5,
-                ),
-                color: widget.selected ? scheme.error.withAlpha(64) : null,
-              ),
-            ),
-            if (widget.selected)
-              Positioned(
-                top: 4,
-                left: 4,
-                child: Icon(Icons.check_circle, size: 20, color: scheme.error),
-              )
-            else
-              Positioned(
-                bottom: 4,
-                right: 4,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'احتفظ',
-                    style: TextStyle(fontSize: 10, color: scheme.onPrimary),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
