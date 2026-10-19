@@ -542,4 +542,142 @@ class _DuplicatesHubState extends State<DuplicatesHub>
   late final TabController _controller;
 
   void _syncFromNotifier() {
-    if (_controller.index != widget.tab.value
+    if (_controller.index != widget.tab.value) {
+      _controller.animateTo(widget.tab.value);
+    }
+  }
+
+  void _syncToNotifier() {
+    if (!_controller.indexIsChanging) {
+      widget.tab.value = _controller.index;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TabController(length: 2, vsync: this);
+    widget.tab.addListener(_syncFromNotifier);
+    _controller.addListener(_syncToNotifier);
+  }
+
+  @override
+  void dispose() {
+    widget.tab.removeListener(_syncFromNotifier);
+    _controller.removeListener(_syncToNotifier);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('المكرر'),
+        centerTitle: false,
+        bottom: TabBar(
+          controller: _controller,
+          tabs: const [
+            Tab(text: 'الصور'),
+            Tab(text: 'الفيديوهات'),
+          ],
+        ),
+      ),
+      body: SafeArea(
+        child: TabBarView(
+          controller: _controller,
+          children: const [
+            DuplicatesScreen(type: RequestType.image),
+            DuplicatesScreen(type: RequestType.video),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DuplicatesScreen extends StatefulWidget {
+  const DuplicatesScreen({super.key, required this.type});
+
+  final RequestType type;
+
+  @override
+  State<DuplicatesScreen> createState() => _DuplicatesScreenState();
+}
+
+class _DuplicatesScreenState extends State<DuplicatesScreen>
+    with AutomaticKeepAliveClientMixin {
+  bool _scanning = false;
+  bool _scanned = false;
+  String _status = '';
+  double? _progress;
+  List<List<AssetEntity>> _groups = [];
+  final Set<String> _selected = {};
+  final Map<String, int> _sizes = {};
+
+  @override
+  bool get wantKeepAlive => true;
+
+  bool get _isVideo {
+    return widget.type == RequestType.video;
+  }
+
+  void _msg(String text) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
+  }
+
+  int _selectedBytes() {
+    var total = 0;
+    for (final id in _selected) {
+      total += _sizes[id] ?? 0;
+    }
+    return total;
+  }
+
+  Future<void> _scan() async {
+    if (_scanning) {
+      return;
+    }
+    final perm = await PhotoManager.requestPermissionExtend();
+    if (!perm.hasAccess) {
+      _msg('نحتاج إذن الوصول إلى الصور والفيديو');
+      return;
+    }
+    setState(() {
+      _scanning = true;
+      _scanned = false;
+      _groups = [];
+      _selected.clear();
+      _sizes.clear();
+      _progress = null;
+      _status = 'جارٍ تحميل القائمة…';
+    });
+
+    try {
+      final paths = await PhotoManager.getAssetPathList(
+        onlyAll: true,
+        type: widget.type,
+      );
+      List<AssetEntity> assets = [];
+      if (paths.isNotEmpty) {
+        final count = await paths.first.assetCountAsync;
+        assets = await paths.first.getAssetListRange(start: 0, end: count);
+      }
+
+      final byKey = <String, List<AssetEntity>>{};
+      for (var i = 0; i < assets.length; i++) {
+        try {
+          final file = await assets[i].originFile;
+          if (file != null) {
+            final len = await file.length();
+            _sizes[assets[i].id] = len;
+            final key = '${len}_${assets[i].duration}';
+            byKey.putIfAbsent(key, () => []).add(assets[i]);
+          }
+        } catch (_) {}
+        if (i % 20 == 0 && mounted) {
