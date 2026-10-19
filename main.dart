@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 void main() => runApp(const CleanerApp());
 
@@ -28,11 +29,57 @@ class CleanerApp extends StatelessWidget {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   static const double usedGb = 94;
   static const double totalGb = 128;
+
+  int? _imageCount;
+  int? _videoCount;
+  bool _scanning = false;
+
+  Future<int> _count(RequestType type) async {
+    final paths =
+        await PhotoManager.getAssetPathList(onlyAll: true, type: type);
+    if (paths.isEmpty) return 0;
+    return paths.first.assetCountAsync;
+  }
+
+  Future<void> _scan() async {
+    if (_scanning) return;
+    setState(() => _scanning = true);
+    try {
+      final perm = await PhotoManager.requestPermissionExtend();
+      if (!perm.hasAccess) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('نحتاج إذن الوصول إلى الصور والفيديو'),
+            action: SnackBarAction(
+              label: 'الإعدادات',
+              onPressed: PhotoManager.openSetting,
+            ),
+          ),
+        );
+        return;
+      }
+      final images = await _count(RequestType.image);
+      final videos = await _count(RequestType.video);
+      if (!mounted) return;
+      setState(() {
+        _imageCount = images;
+        _videoCount = videos;
+      });
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,14 +102,46 @@ class HomeScreen extends StatelessWidget {
                   SizedBox(
                     height: 52,
                     child: FilledButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.search),
-                      label: const Text(
-                        'افحص الآن',
-                        style: TextStyle(fontSize: 16),
+                      onPressed: _scan,
+                      icon: _scanning
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.search),
+                      label: Text(
+                        _scanning ? 'جارٍ الفحص…' : 'افحص الآن',
+                        style: const TextStyle(fontSize: 16),
                       ),
                     ),
                   ),
+                  if (_imageCount != null && _videoCount != null) ...[
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      color: scheme.primaryContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle,
+                                color: scheme.onPrimaryContainer),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'تم العثور على $_imageCount صورة و $_videoCount فيديو',
+                                style: TextStyle(
+                                  color: scheme.onPrimaryContainer,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   GridView.count(
                     crossAxisCount: 2,
@@ -75,22 +154,22 @@ class HomeScreen extends StatelessWidget {
                       _CategoryCard(
                         icon: Icons.content_copy,
                         title: 'صور مكررة',
-                        size: '1.2 غيغابايت',
+                        size: 'قريبًا',
                       ),
                       _CategoryCard(
                         icon: Icons.photo_library_outlined,
                         title: 'صور متشابهة',
-                        size: '860 ميغابايت',
+                        size: 'قريبًا',
                       ),
                       _CategoryCard(
                         icon: Icons.videocam_outlined,
                         title: 'فيديوهات مكررة',
-                        size: '2.4 غيغابايت',
+                        size: 'قريبًا',
                       ),
                       _CategoryCard(
                         icon: Icons.cleaning_services_outlined,
                         title: 'الكاش والملفات',
-                        size: '1.8 غيغابايت',
+                        size: 'قريبًا',
                       ),
                     ],
                   ),
