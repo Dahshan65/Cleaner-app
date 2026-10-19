@@ -110,7 +110,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Status Card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -406,8 +405,141 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
     }
   }
 
-  void _deleteSelected() async {
+  void _deleteSelected() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E2C),
+        title: const Text('Confirm Deletion', style: TextStyle(color: Colors.white)),
+        content: const Text('Are you sure you want to permanently delete selected items?', style: TextStyle(color: Colors.grey)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await PhotoManager.editor.deleteWithIds(_selectedIds.toList());
+              setState(() {
+                _duplicates.removeWhere((item) => _selectedIds.contains(item.id));
+                _selectedIds.clear();
+              });
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('🗑️ Selected duplicates deleted successfully!')),
+              );
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF66)));
+    }
+
+    if (_duplicates.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle_outline, size: 64, color: Color(0xFF00FF66)),
+            const SizedBox(height: 16),
+            Text(
+              'No duplicate ${widget.label} found!',
+              style: const TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            itemCount: _duplicates.length,
+            itemBuilder: (context, index) {
+              final asset = _duplicates[index];
+              final isSelected = _selectedIds.contains(asset.id);
+
+              return FutureBuilder<File?>(
+                future: asset.file,
+                builder: (context, fileSnapshot) {
+                  return FutureBuilder<int>(
+                    future: fileSnapshot.hasData && fileSnapshot.data != null
+                        ? fileSnapshot.data!.length()
+                        : Future.value(0),
+                    builder: (context, sizeSnapshot) {
+                      final fileSizeMb = (sizeSnapshot.data ?? 0) / (1024 * 1024);
+
+                      return CheckboxListTile(
+                        activeColor: const Color(0xFF00FF66),
+                        checkColor: Colors.black,
+                        secondary: FutureBuilder<Uint8List?>(
+                          future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(snapshot.data!, width: 50, height: 50, fit: BoxFit.cover),
+                              );
+                            }
+                            return Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(8)),
+                              child: const Icon(Icons.insert_drive_file, color: Colors.white70),
+                            );
+                          },
+                        ),
+                        title: Text(asset.title ?? 'File ${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: Text('Size: ${fileSizeMb.toStringAsFixed(2)} MB', style: const TextStyle(color: Colors.grey)),
+                        value: isSelected,
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) {
+                              _selectedIds.add(asset.id);
+                            } else {
+                              _selectedIds.remove(asset.id);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF0055),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: _selectedIds.isNotEmpty ? _deleteSelected : null,
+                child: Text(
+                  'Delete Selected (${_selectedIds.length})',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
