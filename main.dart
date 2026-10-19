@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:disk_space_plus/disk_space_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -161,6 +162,31 @@ class _HomeScreenState extends State<HomeScreen> {
   int? _imageCount;
   int? _videoCount;
   bool _scanning = false;
+  double? _freeMb;
+  double? _totalMb;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStorage();
+  }
+
+  Future<void> _loadStorage() async {
+    try {
+      final plugin = DiskSpacePlus();
+      final free = await plugin.getFreeDiskSpace;
+      final total = await plugin.getTotalDiskSpace;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _freeMb = free;
+        _totalMb = total;
+      });
+    } catch (_) {
+      // تعذّرت قراءة المساحة، تبقى البطاقة بدون أرقام
+    }
+  }
 
   Future<int> _count(RequestType type) async {
     final paths = await PhotoManager.getAssetPathList(
@@ -212,6 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _imageCount = images;
         _videoCount = videos;
       });
+      await _loadStorage();
     } finally {
       if (mounted) {
         setState(() {
@@ -237,6 +264,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  StorageSummary(freeMb: _freeMb, totalMb: _totalMb),
+                  const SizedBox(height: 12),
                   MediaSummary(images: _imageCount, videos: _videoCount),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -306,6 +335,81 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontSize: 13,
                   color: scheme.onSurfaceVariant,
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class StorageSummary extends StatelessWidget {
+  const StorageSummary({
+    super.key,
+    required this.freeMb,
+    required this.totalMb,
+  });
+
+  final double? freeMb;
+  final double? totalMb;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final free = freeMb;
+    final total = totalMb;
+    final known = free != null && total != null && total > 0;
+
+    double ratio = 0;
+    String percent = '—';
+    String usedText = 'جارٍ قراءة المساحة…';
+    String detailText = '';
+
+    if (known) {
+      final usedMb = total - free;
+      ratio = (usedMb / total).clamp(0.0, 1.0);
+      percent = '${(ratio * 100).round()}%';
+      usedText = '${formatBytes((usedMb * 1048576).round())} مستخدمة';
+      detailText =
+          'متبقي ${formatBytes((free * 1048576).round())} من ${formatBytes((total * 1048576).round())}';
+    }
+
+    return Card(
+      elevation: 0,
+      color: scheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 88,
+              height: 88,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox.expand(
+                    child: CircularProgressIndicator(
+                      value: known ? ratio : null,
+                      strokeWidth: 9,
+                      backgroundColor: scheme.surface,
+                    ),
+                  ),
+                  Text(percent, style: textTheme.titleMedium),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(usedText, style: textTheme.titleSmall),
+                  if (detailText.isNotEmpty) const SizedBox(height: 4),
+                  if (detailText.isNotEmpty)
+                    Text(detailText, style: textTheme.bodySmall),
+                ],
               ),
             ),
           ],
