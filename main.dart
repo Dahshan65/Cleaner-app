@@ -163,12 +163,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return paths.first.assetCountAsync;
   }
 
-  void _soon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('هذه الميزة ستُضاف قريبًا')),
-    );
-  }
-
   Future<void> _scan() async {
     if (_scanning) {
       return;
@@ -213,9 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final hasCounts = _imageCount != null && _videoCount != null;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('مساحة الهاتف'),
@@ -233,4 +224,73 @@ class _HomeScreenState extends State<HomeScreen> {
                   SizedBox(
                     height: 52,
                     child: FilledButton.icon(
-                      onPressed: _scan,
+                      onPressed: _scanning ? null : _scan,
+                      icon: _scanning
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.search),
+                      label: Text(_scanning ? 'جاري الفحص...' : 'فحص الوسائط'),
+                    ),
+                  ),
+                  if (_imageCount != null || _videoCount != null) ...[
+                    const SizedBox(height: 20),
+                    Text('الصور: ${_imageCount ?? 0} | الفيديوهات: ${_videoCount ?? 0}'),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// مكون مبسط لملخص المساحة لتفادي أي النقص في الويدجتس التابعة
+class StorageSummary extends StatelessWidget {
+  const StorageSummary({super.key, required this.usedGb, required this.totalGb});
+
+  final double usedGb;
+  final double totalGb;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Text('المساحة المستخدمة: $usedGb GB من $totalGb GB'),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(value: usedGb / totalGb),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// نموذج مبدئي لشاشة الملفات المكررة لتفادي الأخطاء
+class DuplicatesHub extends StatelessWidget {
+  const DuplicatesHub({super.key, required this.tab});
+
+  final ValueNotifier<int> tab;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('الملفات المكررة')),
+      body: Center(
+        child: ValueListenableBuilder<int>(
+          valueListenable: tab,
+          builder: (context, value, child) {
+            return Text('تبويب الملفات المكررة النشط حالياً: $value');
+          },
+        ),
+      ),
+    );
+  }
+}
