@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace "com.example.cleaner_app"
-    compileSdkVersion 34
+    compileSdk 36
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
