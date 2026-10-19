@@ -5,9 +5,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-// متغيرات عامة للتحكم في ثيم التطبيق ولغته
+// متغيرات عامة للتحكم في ثيم التطبيق
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
-final ValueNotifier<Locale> localeNotifier = ValueNotifier(const Locale('ar'));
 
 void main() => runApp(const CleanerApp());
 
@@ -19,33 +18,25 @@ class CleanerApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
       builder: (context, currentThemeMode, _) {
-        return ValueListenableBuilder<Locale>(
-          valueListenable: localeNotifier,
-          builder: (context, currentLocale, _) {
-            return MaterialApp(
-              debugShowCheckedModeBanner: false,
-              title: currentLocale.languageCode == 'ar' ? 'منظف الهاتف' : 'Phone Cleaner',
-              locale: currentLocale,
-              builder: (context, child) => Directionality(
-                textDirection: currentLocale.languageCode == 'ar'
-                    ? TextDirection.rtl
-                    : TextDirection.ltr,
-                child: child!,
-              ),
-              themeMode: currentThemeMode,
-              theme: ThemeData(
-                useMaterial3: true,
-                colorSchemeSeed: const Color(0xFF2F6FED),
-                brightness: Brightness.light,
-              ),
-              darkTheme: ThemeData(
-                useMaterial3: true,
-                colorSchemeSeed: const Color(0xFF2F6FED),
-                brightness: Brightness.dark,
-              ),
-              home: const RootScreen(),
-            );
-          },
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Phone Cleaner',
+          builder: (context, child) => Directionality(
+            textDirection: TextDirection.ltr,
+            child: child!,
+          ),
+          themeMode: currentThemeMode,
+          theme: ThemeData(
+            useMaterial3: true,
+            colorSchemeSeed: const Color(0xFF2F6FED),
+            brightness: Brightness.light,
+          ),
+          darkTheme: ThemeData(
+            useMaterial3: true,
+            colorSchemeSeed: const Color(0xFF2F6FED),
+            brightness: Brightness.dark,
+          ),
+          home: const RootScreen(),
         );
       },
     );
@@ -76,7 +67,6 @@ class _RootScreenState extends State<RootScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = localeNotifier.value.languageCode == 'ar';
     final pages = <Widget>[
       HomeScreen(onOpenDuplicates: _openDuplicates),
       DuplicatesHub(tab: _dupTab),
@@ -91,22 +81,22 @@ class _RootScreenState extends State<RootScreen> {
         onDestinationSelected: (i) {
           setState(() => _index = i);
         },
-        destinations: [
+        destinations: const [
           NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            label: isAr ? 'الرئيسية' : 'Home',
+            icon: Icon(Icons.home_outlined),
+            label: 'Home',
           ),
           NavigationDestination(
-            icon: const Icon(Icons.content_copy),
-            label: isAr ? 'المكرر' : 'Duplicates',
+            icon: Icon(Icons.content_copy),
+            label: 'Duplicates',
           ),
           NavigationDestination(
-            icon: const Icon(Icons.cleaning_services_outlined),
-            label: isAr ? 'التنظيف' : 'Cleaning',
+            icon: Icon(Icons.cleaning_services_outlined),
+            label: 'Cleaning',
           ),
           NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            label: isAr ? 'الإعدادات' : 'Settings',
+            icon: Icon(Icons.settings_outlined),
+            label: 'Settings',
           ),
         ],
       ),
@@ -134,22 +124,18 @@ class _CleaningScreenState extends State<CleaningScreen> {
       _cacheSize = 0.0;
     });
     if (!mounted) return;
-    final isAr = localeNotifier.value.languageCode == 'ar';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isAr
-            ? 'تم تنظيف الكاش بنجاح وفرغنا مساحة إضافية!'
-            : 'Cache cleaned successfully and freed up space!'),
+      const SnackBar(
+        content: Text('Cache cleaned successfully and freed up space!'),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isAr = localeNotifier.value.languageCode == 'ar';
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAr ? 'التنظيف' : 'Cleaning'),
+        title: const Text('Cleaning'),
         centerTitle: false,
       ),
       body: Padding(
@@ -164,13 +150,13 @@ class _CleaningScreenState extends State<CleaningScreen> {
                   children: [
                     const Icon(Icons.cleaning_services, size: 56, color: Colors.blue),
                     const SizedBox(height: 16),
-                    Text(
-                      isAr ? 'ملفات الكاش المؤقتة' : 'Temporary Cache Files',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    const Text(
+                      'Temporary Cache Files',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isAr ? 'المساحة المستهلكة: $_cacheSize GB' : 'Used Space: $_cacheSize GB',
+                      'Used Space: $_cacheSize GB',
                       style: const TextStyle(fontSize: 16),
                     ),
                   ],
@@ -187,9 +173,7 @@ class _CleaningScreenState extends State<CleaningScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.delete_sweep),
-              label: Text(_isCleaning
-                  ? (isAr ? 'جاري التنظيف...' : 'Cleaning...')
-                  : (isAr ? 'تنظيف الكاش الآن' : 'Clean Cache Now')),
+              label: Text(_isCleaning ? 'Cleaning...' : 'Clean Cache Now'),
             ),
             const SizedBox(height: 16),
           ],
@@ -205,40 +189,39 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = localeNotifier.value.languageCode == 'ar';
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAr ? 'الإعدادات' : 'Settings'),
+        title: const Text('Settings'),
         centerTitle: false,
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(
-              isAr ? 'مظهر التطبيق' : 'App Theme',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            const Text(
+              'App Theme',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 12),
             ValueListenableBuilder<ThemeMode>(
               valueListenable: themeNotifier,
               builder: (context, mode, _) {
                 return SegmentedButton<ThemeMode>(
-                  segments: [
+                  segments: const [
                     ButtonSegment<ThemeMode>(
                       value: ThemeMode.system,
-                      label: Text(isAr ? 'النظام' : 'System'),
-                      icon: const Icon(Icons.brightness_auto),
+                      label: Text('System'),
+                      icon: Icon(Icons.brightness_auto),
                     ),
                     ButtonSegment<ThemeMode>(
                       value: ThemeMode.light,
-                      label: Text(isAr ? 'فاتح' : 'Light'),
-                      icon: const Icon(Icons.light_mode),
+                      label: Text('Light'),
+                      icon: Icon(Icons.light_mode),
                     ),
                     ButtonSegment<ThemeMode>(
                       value: ThemeMode.dark,
-                      label: Text(isAr ? 'داكن' : 'Dark'),
-                      icon: const Icon(Icons.dark_mode),
+                      label: Text('Dark'),
+                      icon: Icon(Icons.dark_mode),
                     ),
                   ],
                   selected: {mode},
@@ -249,45 +232,16 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             const Divider(height: 32),
-            Text(
-              isAr ? 'لغة التطبيق' : 'App Language',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 12),
-            ValueListenableBuilder<Locale>(
-              valueListenable: localeNotifier,
-              builder: (context, locale, _) {
-                return SegmentedButton<Locale>(
-                  segments: const [
-                    ButtonSegment<Locale>(
-                      value: Locale('ar'),
-                      label: Text('العربية'),
-                    ),
-                    ButtonSegment<Locale>(
-                      value: Locale('en'),
-                      label: Text('English'),
-                    ),
-                  ],
-                  selected: {locale},
-                  onSelectionChanged: (newSelection) {
-                    localeNotifier.value = newSelection.first;
-                  },
-                );
-              },
-            ),
-            const Divider(height: 32),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: Text(isAr ? 'حول التطبيق' : 'About App'),
-              subtitle: Text(isAr ? 'الإصدار 1.0.0' : 'Version 1.0.0'),
+              title: const Text('About App'),
+              subtitle: const Text('Version 1.0.0'),
               onTap: () {
                 showAboutDialog(
                   context: context,
-                  applicationName: isAr ? 'منظف الهاتف' : 'Phone Cleaner',
+                  applicationName: 'Phone Cleaner',
                   applicationVersion: '1.0.0',
-                  applicationLegalese: isAr
-                      ? 'جميع الحقوق محفوظة © 2026'
-                      : 'All rights reserved © 2026',
+                  applicationLegalese: 'All rights reserved © 2026',
                 );
               },
             ),
@@ -340,14 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!mounted) {
           return;
         }
-        final isAr = localeNotifier.value.languageCode == 'ar';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isAr
-                ? 'نحتاج إذن الوصول إلى الصور والفيديو'
-                : 'We need permission to access photos and videos'),
+            content: const Text('We need permission to access photos and videos'),
             action: SnackBarAction(
-              label: isAr ? 'الإعدادات' : 'Settings',
+              label: 'Settings',
               onPressed: PhotoManager.openSetting,
             ),
           ),
@@ -374,10 +325,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = localeNotifier.value.languageCode == 'ar';
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAr ? 'مساحة الهاتف' : 'Phone Storage'),
+        title: const Text('Phone Storage'),
         centerTitle: false,
       ),
       body: SafeArea(
@@ -400,9 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.search),
-                      label: Text(_scanning
-                          ? (isAr ? 'جاري الفحص...' : 'Scanning...')
-                          : (isAr ? 'فحص الوسائط' : 'Scan Media')),
+                      label: Text(_scanning ? 'Scanning...' : 'Scan Media'),
                     ),
                   ),
                   if (_imageCount != null || _videoCount != null) ...[
@@ -411,9 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Text(
-                          isAr
-                              ? 'الصور: ${_imageCount ?? 0}\nالفيديوهات: ${_videoCount ?? 0}'
-                              : 'Images: ${_imageCount ?? 0}\nVideos: ${_videoCount ?? 0}',
+                          'Images: ${_imageCount ?? 0}\nVideos: ${_videoCount ?? 0}',
                           style: const TextStyle(fontSize: 16),
                           textAlign: TextAlign.center,
                         ),
@@ -424,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   OutlinedButton.icon(
                     onPressed: () => widget.onOpenDuplicates(0),
                     icon: const Icon(Icons.copy),
-                    label: Text(isAr ? 'عرض الملفات المكررة' : 'View Duplicates'),
+                    label: const Text('View Duplicates'),
                   ),
                 ],
               ),
@@ -445,16 +391,13 @@ class StorageSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = localeNotifier.value.languageCode == 'ar';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             Text(
-              isAr
-                  ? 'المساحة المستخدمة: $usedGb GB من $totalGb GB'
-                  : 'Used Space: $usedGb GB of $totalGb GB',
+              'Used Space: $usedGb GB of $totalGb GB',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -470,7 +413,7 @@ class StorageSummary extends StatelessWidget {
   }
 }
 
-// ==================== مركز الملفات المكررة (مع فحص حقيقي MD5) ====================
+// ==================== مركز الملفات المكررة ====================
 class DuplicatesHub extends StatefulWidget {
   const DuplicatesHub({super.key, required this.tab});
   final ValueNotifier<int> tab;
@@ -509,16 +452,15 @@ class _DuplicatesHubState extends State<DuplicatesHub>
 
   @override
   Widget build(BuildContext context) {
-    final isAr = localeNotifier.value.languageCode == 'ar';
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAr ? 'الملفات المكررة' : 'Duplicate Files'),
+        title: const Text('Duplicate Files'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: [
-            Tab(text: isAr ? 'صور متطابقة' : 'Identical Photos'),
-            Tab(text: isAr ? 'لقطات شاشة' : 'Screenshots'),
-            Tab(text: isAr ? 'فيديوهات كبيرة' : 'Large Videos'),
+          tabs: const [
+            Tab(text: 'Identical Photos'),
+            Tab(text: 'Screenshots'),
+            Tab(text: 'Large Videos'),
           ],
           onTap: (index) {
             widget.tab.value = index;
@@ -606,18 +548,15 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
   }
 
   void _deleteSelected() async {
-    final isAr = localeNotifier.value.languageCode == 'ar';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isAr ? 'تأكيد الحذف' : 'Confirm Deletion'),
-        content: Text(isAr
-            ? 'هل أنت متأكد من حذف العناصر المحددة نهائياً؟'
-            : 'Are you sure you want to delete selected items?'),
+        title: const Text('Confirm Deletion'),
+        content: const Text('Are you sure you want to delete selected items?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(isAr ? 'إلغاء' : 'Cancel'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
@@ -629,14 +568,12 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
               });
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(isAr
-                      ? 'تم حذف العناصر بنجاح وتحرير المساحة!'
-                      : 'Items deleted successfully and space freed!'),
+                const SnackBar(
+                  content: Text('Items deleted successfully and space freed!'),
                 ),
               );
             },
-            child: Text(isAr ? 'حذف' : 'Delete'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -645,17 +582,15 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = localeNotifier.value.languageCode == 'ar';
-
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (_duplicates.isEmpty) {
-      return Center(
+      return const Center(
         child: Text(
-          isAr ? 'لا توجد ملفات مكررة مطابقة' : 'No duplicate files found',
-          style: const TextStyle(fontSize: 16),
+          'No duplicate files found',
+          style: TextStyle(fontSize: 16),
         ),
       );
     }
@@ -706,9 +641,9 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
                             );
                           },
                         ),
-                        title: Text(asset.title ?? '${isAr ? "ملف" : "File"} ${index + 1}'),
+                        title: Text(asset.title ?? 'File ${index + 1}'),
                         subtitle: Text(
-                          '${isAr ? "الحجم" : "Size"}: ${fileSizeMb.toStringAsFixed(2)} MB',
+                          'Size: ${fileSizeMb.toStringAsFixed(2)} MB',
                         ),
                         value: isSelected,
                         onChanged: (val) {
@@ -736,7 +671,7 @@ class _RealDuplicateScanTabState extends State<RealDuplicateScanTab> {
             child: FilledButton.icon(
               onPressed: _selectedIds.isNotEmpty ? _deleteSelected : null,
               icon: const Icon(Icons.delete),
-              label: Text(isAr ? 'حذف العناصر المحددة' : 'Delete Selected Items'),
+              label: const Text('Delete Selected Items'),
             ),
           ),
         ),
