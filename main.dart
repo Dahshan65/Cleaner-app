@@ -96,25 +96,33 @@ class _RootScreenState extends State<RootScreen> {
     });
   }
 
+  void _openSimilar() {
+    setState(() {
+      _index = 3;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
       HomeScreen(
         onOpenDuplicates: _openDuplicates,
         onOpenLarge: _openLarge,
+        onOpenSimilar: _openSimilar,
       ),
       DuplicatesHub(tab: _dupTab),
       const LargeFilesScreen(),
+      const SimilarImagesScreen(),
       const SettingsScreen(),
     ];
 
     return Scaffold(
       body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
+        selectedIndex: _index > 3 ? 3 : _index,
         onDestinationSelected: (i) {
           setState(() {
-            _index = i;
+            _index = i == 3 ? 4 : i; // ربط الإعدادات بالفهرس الأخير
           });
         },
         destinations: const [
@@ -149,10 +157,12 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.onOpenDuplicates,
     required this.onOpenLarge,
+    required this.onOpenSimilar,
   });
 
   final ValueChanged<int> onOpenDuplicates;
   final VoidCallback onOpenLarge;
+  final VoidCallback onOpenSimilar;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -195,12 +205,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return 0;
     }
     return await paths.first.assetCountAsync;
-  }
-
-  void _soon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('هذه الميزة ستُضاف قريبًا')),
-    );
   }
 
   Future<void> _scan() async {
@@ -303,8 +307,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       CategoryCard(
                         icon: Icons.photo_library_outlined,
                         title: 'صور متشابهة',
-                        subtitle: 'قريبًا',
-                        onTap: _soon,
+                        subtitle: 'افتح للبحث',
+                        onTap: widget.onOpenSimilar,
                       ),
                       CategoryCard(
                         icon: Icons.videocam_outlined,
@@ -1076,6 +1080,360 @@ class _DuplicateThumbState extends State<DuplicateThumb> {
 }
 
 // ---------------------------------------------------------------------------
+// الصور المتشابهة (الميزة الجديدة)
+// ---------------------------------------------------------------------------
+
+class SimilarImagesScreen extends StatefulWidget {
+  const SimilarImagesScreen({super.key});
+
+  @override
+  State<SimilarImagesScreen> createState() => _SimilarImagesScreenState();
+}
+
+class _SimilarImagesScreenState extends State<SimilarImagesScreen>
+    with AutomaticKeepAliveClientMixin {
+  bool _scanning = false;
+  bool _scanned = false;
+  String _status = '';
+  double? _progress;
+  List<List<AssetEntity>> _groups = [];
+  final Set<String> _selected = {};
+  final Map<String, int> _sizes = {};
+
+  @override
+  bool get wantKeepAlive => true;
+
+  void _msg(String text) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
+  }
+
+  int _selectedBytes() {
+    var total = 0;
+    for (final id in _selected) {
+      total += _sizes[id] ?? 0;
+    }
+    return total;
+  }
+
+  Future<void> _scan() async {
+    if (_scanning) {
+      return;
+    }
+    final perm = await PhotoManager.requestPermissionExtend();
+    if (!perm.hasAccess) {
+      _msg('نحتاج إذن الوصول إلى الصور');
+      return;
+    }
+    setState(() {
+      _scanning = true;
+      _scanned = false;
+      _groups = [];
+      _selected.clear();
+      _sizes.clear();
+      _progress = null;
+      _status = 'جارٍ تحميل الصور…';
+    });
+
+    try {
+      final paths = await PhotoManager.getAssetPathList(
+        onlyAll: true,
+        type: RequestType.image,
+      );
+      List<AssetEntity> assets = [];
+      if (paths.isNotEmpty) {
+        final count = await paths.first.assetCountAsync;
+        assets = await paths.first.getAssetListRange(start: 0, end: count);
+      }
+
+      // تجميع الصور الملتقطة في نفس اليوم والفترة الزمنية (كمثال للتشابه)
+      final byTimeGroup = <String, List<AssetEntity>>{};
+      for (var i = 0; i < assets.length; i++) {
+        final a = assets[i];
+        try {
+          final file = await a.originFile;
+          if (file != null) {
+            _sizes[a.id] = await file.length();
+          }
+        } catch (_) {}
+
+        final d = a.createDateTime;
+        // مفتاح يجمع الصور الملتقطة في نفس اليوم والساعة والدقيقة التقريبية
+        final timeKey = '${d.year}-${d.month}-${d.day}-${d.hour}-${d.minute ~/ 2}';
+        byTimeGroup.putIfAbsent(timeKey, () => []).add(a);
+
+        if (i % 20 == 0 && mounted) {
+          setState(() {
+            _status = 'تحليل الصور ${i + 1} من ${assets.length}';
+            _progress = (i + 1) / assets.length;
+          });
+        }
+      }
+
+      final groups = <List<AssetEntity>>[];
+      for (final entry in byTimeGroup.entries) {
+        if (entry.value.length > 1) {
+          entry.value.sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
+          groups.add(entry.value);
+        }
+      }
+
+      for (final g in groups) {
+        for (var k = 1; k < g.length; k++) {
+          _selected.add(g[k].id);
+        }
+      }
+
+      _groups = groups;
+    } catch (e) {
+      _msg('حدث خطأ أثناء الفحص');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _scanning = false;
+          _scanned = true;
+        });
+      }
+    }
+  }
+
+  void _toggle(List<AssetEntity> group, AssetEntity asset) {
+    if (_selected.contains(asset.id)) {
+      setState(() {
+        _selected.remove(asset.id);
+      });
+      return;
+    }
+    var remaining = 0;
+    for (final x in group) {
+      if (x.id != asset.id && !_selected.contains(x.id)) {
+        remaining++;
+      }
+    }
+    if (remaining == 0) {
+      _msg('احتفظ بنسخة واحدة على الأقل في كل مجموعة');
+      return;
+    }
+    setState(() {
+      _selected.add(asset.id);
+    });
+  }
+
+  Future<void> _delete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) {
+        return AlertDialog(
+          title: const Text('حذف الصور المحددة؟'),
+          content: Text(
+            'عدد الصور: ${_selected.length}\nسيطلب منك أندرويد تأكيد الحذف.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('متابعة'),
+            ),
+          ],
+        );
+      },
+    );
+    if (ok != true) {
+      return;
+    }
+
+    final deleted = await PhotoManager.editor.deleteWithIds(
+      _selected.toList(),
+    );
+    if (!mounted) {
+      return;
+    }
+    final newGroups = <List<AssetEntity>>[];
+    for (final g in _groups) {
+      final rest = g.where((a) => !deleted.contains(a.id)).toList();
+      if (rest.length > 1) {
+        newGroups.add(rest);
+      }
+    }
+    setState(() {
+      _selected.removeAll(deleted);
+      _groups = newGroups;
+    });
+    _msg('تم حذف ${deleted.length} صورة');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final scheme = Theme.of(context).colorScheme;
+
+    if (_scanning) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('صور متشابهة')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LinearProgressIndicator(value: _progress),
+                const SizedBox(height: 16),
+                Text(_status),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!_scanned) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('صور متشابهة')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.photo_library_outlined,
+                  size: 56,
+                  color: scheme.primary,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'ابحث عن الصور المتقاربة والمتشابهة في التوقيت والمحتوى لتنظيفها.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: _scan,
+                  icon: const Icon(Icons.search),
+                  label: const Text('ابدأ البحث'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_groups.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('صور متشابهة')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 56,
+                  color: scheme.primary,
+                ),
+                const SizedBox(height: 16),
+                const Text('لم نجد صورًا متشابهة'),
+                const SizedBox(height: 20),
+                OutlinedButton(
+                  onPressed: _scan,
+                  child: const Text('فحص مرة أخرى'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('صور متشابهة')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _groups.length,
+              itemBuilder: (context, i) {
+                final g = _groups[i];
+                return Card(
+                  elevation: 0,
+                  color: scheme.surfaceContainerHighest,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'مجموعة تقارب ${i + 1} · ${g.length} صور',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final a in g)
+                              DuplicateThumb(
+                                key: ValueKey(a.id),
+                                asset: a,
+                                selected: _selected.contains(a.id),
+                                onTap: () => _toggle(g, a),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              border: Border(top: BorderSide(color: scheme.outlineVariant)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'تم تحديد ${_selected.length} صور · توفير ${formatBytes(_selectedBytes())}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: scheme.error,
+                      foregroundColor: scheme.onError,
+                    ),
+                    onPressed: _selected.isEmpty ? null : _delete,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('حذف المحدد'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // الملفات الكبيرة
 // ---------------------------------------------------------------------------
 
@@ -1462,7 +1820,7 @@ class _ThumbBoxState extends State<ThumbBox> {
     _future = widget.asset.thumbnailDataWithSize(const ThumbnailSize(160, 160));
   }
 
-  String _durationText() {
+  String _durationTest() {
     final d = widget.asset.videoDuration;
     final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
     return '${d.inMinutes}:$seconds';
@@ -1503,7 +1861,7 @@ class _ThumbBoxState extends State<ThumbBox> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  _durationText(),
+                  _durationTest(),
                   style: const TextStyle(fontSize: 9, color: Colors.white),
                 ),
               ),
@@ -1529,69 +1887,3 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('الإعدادات'),
-        centerTitle: false,
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text('المظهر', style: textTheme.titleSmall),
-            const SizedBox(height: 8),
-            ValueListenableBuilder<ThemeMode>(
-              valueListenable: appThemeMode,
-              builder: (context, mode, _) {
-                return SegmentedButton<ThemeMode>(
-                  segments: const [
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.system,
-                      label: Text('تلقائي'),
-                    ),
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.light,
-                      label: Text('فاتح'),
-                    ),
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.dark,
-                      label: Text('داكن'),
-                    ),
-                  ],
-                  selected: {mode},
-                  onSelectionChanged: (s) {
-                    appThemeMode.value = s.first;
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            Text('الأذونات', style: textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              color: scheme.surfaceContainerHighest,
-              child: ListTile(
-                leading: Icon(Icons.lock_open_outlined, color: scheme.primary),
-                title: const Text('إذن الصور والفيديو'),
-                subtitle: const Text('افتح إعدادات النظام لتغيير الإذن'),
-                onTap: () {
-                  PhotoManager.openSetting();
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text('حول التطبيق', style: textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              color: scheme.surfaceContainerHighest,
-              child: const ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('منظف الهاتف'),
-                subtitle: Text('برمجة: وائل دهشان'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
