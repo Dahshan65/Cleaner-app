@@ -17,8 +17,9 @@ jobs:
       - name: Generate Android project
         run: flutter create --project-name cleaner_app --platforms=android .
 
-      - name: Add photo library package
-        run: flutter pub add photo_manager crypto
+      - name: Add packages
+        run: flutter pub add photo_manager crypto disk_space_plus
+
       - name: Add Android permissions
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <application#' android/app/src/main/AndroidManifest.xml
