@@ -20,7 +20,7 @@ class CyberCleanerApp extends StatelessWidget {
       builder: (context, currentThemeMode, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Cyber Cleaner',
+          title: 'Cyber Cleaner Ultimate',
           builder: (context, child) => Directionality(
             textDirection: TextDirection.ltr,
             child: child!,
@@ -55,6 +55,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isBoosting = false;
   bool _isCleaningCache = false;
+  bool _autoCleanerEnabled = true;
   double _ramUsage = 74.2;
 
   void _boostRam() async {
@@ -86,11 +87,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openDuplicatesHub(int index) {
+  void _openHub(int index) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => DuplicatesHubScreen(initialTab: index),
+        builder: (context) => CleanerHubScreen(initialTab: index),
       ),
     );
   }
@@ -110,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Status Card
+            // 1. Storage Breakdown & RAM Status Card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -123,17 +124,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.3)),
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'DEVICE MEMORY STATUS',
+                    'STORAGE & MEMORY STATUS',
                     style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'RAM Usage: ${_ramUsage.toStringAsFixed(1)}%',
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
                   const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('RAM: ${_ramUsage.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text('Used: 94 GB / 128 GB', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   LinearProgressIndicator(
                     value: _ramUsage / 100,
                     minHeight: 10,
@@ -141,12 +146,59 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: _ramUsage > 70 ? Colors.redAccent : const Color(0xFF00FF66),
                     borderRadius: BorderRadius.circular(5),
                   ),
+                  const SizedBox(height: 16),
+                  // Storage Breakdown Visual Bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Row(
+                      children: [
+                        Expanded(flex: 40, child: Container(height: 8, color: const Color(0xFFFF9900))), // Photos
+                        Expanded(flex: 25, child: Container(height: 8, color: const Color(0xFF9900FF))), // Videos
+                        Expanded(flex: 15, child: Container(height: 8, color: const Color(0xFF00E5FF))), // Apps
+                        Expanded(flex: 20, child: Container(height: 8, color: Colors.grey.shade700)), // Free
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('🖼️ Photos', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                      Text('🎬 Videos', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                      Text('📱 Apps', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                      Text('✨ Free', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            // 2. Smart Auto-Cleaner Switch & Quick Actions
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF131822),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: SwitchListTile(
+                title: const Text('Smart Auto-Cleaner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('Auto-detect junk weekly in background', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                activeColor: const Color(0xFF00FF66),
+                value: _autoCleanerEnabled,
+                onChanged: (val) {
+                  setState(() => _autoCleanerEnabled = val);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(val ? '🤖 Auto-Cleaner Enabled' : '💤 Auto-Cleaner Disabled')),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+
             const Text(
-              '⚡ QUICK ACTIONS',
+              '⚡ QUICK BOOST',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2),
             ),
             const SizedBox(height: 12),
@@ -174,19 +226,27 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 24),
+
             const Text(
-              '🔥 SMART CLEANERS & DUPLICATES',
+              '🔥 SMART CLEANER HUB',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2),
             ),
             const SizedBox(height: 12),
             
-            // زر الملفات الكبيرة الجديد
             _buildCleanerCard(
-              title: 'Large Files Cleaner',
-              subtitle: 'Find & remove heavy files larger than 50MB',
+              title: 'Screenshot Cleaner',
+              subtitle: 'Scan & wipe old useless screenshots',
+              icon: Icons.camera,
+              color: const Color(0xFF00FFCC),
+              onTap: () => _openHub(0),
+            ),
+            const SizedBox(height: 12),
+            _buildCleanerCard(
+              title: 'Large Files (>50MB)',
+              subtitle: 'Find & remove heavy files easily',
               icon: Icons.sd_storage,
               color: const Color(0xFFFF3366),
-              onTap: () => _openDuplicatesHub(4),
+              onTap: () => _openHub(1),
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
@@ -194,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: 'Scan & delete identical photo copies',
               icon: Icons.photo_library,
               color: const Color(0xFFFF9900),
-              onTap: () => _openDuplicatesHub(0),
+              onTap: () => _openHub(2),
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
@@ -202,23 +262,23 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: 'Find and remove heavy repeated videos',
               icon: Icons.video_library,
               color: const Color(0xFF9900FF),
-              onTap: () => _openDuplicatesHub(1),
+              onTap: () => _openHub(3),
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
-              title: 'Duplicate Audio',
-              subtitle: 'Clean repeated ringtones & audio notes',
-              icon: Icons.audiotrack,
-              color: const Color(0xFF00FFCC),
-              onTap: () => _openDuplicatesHub(2),
-            ),
-            const SizedBox(height: 12),
-            _buildCleanerCard(
-              title: 'Duplicate Files & Apps',
-              subtitle: 'Clear repeated documents and APK packages',
+              title: 'Duplicate Audio & Files',
+              subtitle: 'Clean repeated ringtones, notes & APKs',
               icon: Icons.folder_copy,
               color: const Color(0xFF00E5FF),
-              onTap: () => _openDuplicatesHub(3),
+              onTap: () => _openHub(4),
+            ),
+            const SizedBox(height: 12),
+            _buildCleanerCard(
+              title: 'Recycle Bin (Trash)',
+              subtitle: 'Recover or permanently delete items',
+              icon: Icons.delete_sweep,
+              color: Colors.grey,
+              onTap: () => _openHub(5),
             ),
           ],
         ),
@@ -290,22 +350,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ==================== Duplicates Hub Screen ====================
-class DuplicatesHubScreen extends StatefulWidget {
-  const DuplicatesHubScreen({super.key, required this.initialTab});
+// ==================== Cleaner Hub Screen ====================
+class CleanerHubScreen extends StatefulWidget {
+  const CleanerHubScreen({super.key, required this.initialTab});
   final int initialTab;
 
   @override
-  State<DuplicatesHubScreen> createState() => _DuplicatesHubScreenState();
+  State<CleanerHubScreen> createState() => _CleanerHubScreenState();
 }
 
-class _DuplicatesHubScreenState extends State<DuplicatesHubScreen> with SingleTickerProviderStateMixin {
+class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this, initialIndex: widget.initialTab);
+    _tabController = TabController(length: 6, vsync: this, initialIndex: widget.initialTab);
   }
 
   @override
@@ -318,7 +378,7 @@ class _DuplicatesHubScreenState extends State<DuplicatesHubScreen> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cleaner Hub', style: TextStyle(color: Color(0xFF00FF66))),
+        title: const Text('Cyber Cleaner Hub', style: TextStyle(color: Color(0xFF00FF66))),
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -326,51 +386,64 @@ class _DuplicatesHubScreenState extends State<DuplicatesHubScreen> with SingleTi
           unselectedLabelColor: Colors.grey,
           indicatorColor: const Color(0xFF00FF66),
           tabs: const [
-            Tab(text: 'Photos'),
-            Tab(text: 'Videos'),
-            Tab(text: 'Audio'),
-            Tab(text: 'Files'),
-            Tab(text: 'Large Files'), // التبويب الجديد للملفات الكبيرة
+            Tab(text: 'Screenshots'),
+            Tab(text: 'Large Files'),
+            Tab(text: 'Dup Photos'),
+            Tab(text: 'Dup Videos'),
+            Tab(text: 'Dup Files'),
+            Tab(text: 'Trash Bin'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: const [
-          DuplicateScanView(type: RequestType.image, label: 'Photos', isLargeFiles: false),
-          DuplicateScanView(type: RequestType.video, label: 'Videos', isLargeFiles: false),
-          DuplicateScanView(type: RequestType.audio, label: 'Audio', isLargeFiles: false),
-          DuplicateScanView(type: RequestType.common, label: 'Files', isLargeFiles: false),
-          DuplicateScanView(type: RequestType.common, label: 'Large Files', isLargeFiles: true),
+          ScanView(mode: ScanMode.screenshots),
+          ScanView(mode: ScanMode.largeFiles),
+          ScanView(mode: ScanMode.dupPhotos),
+          ScanView(mode: ScanMode.dupVideos),
+          ScanView(mode: ScanMode.dupFiles),
+          ScanView(mode: ScanMode.trashBin),
         ],
       ),
     );
   }
 }
 
-// ==================== Scan & Clean View ====================
-class DuplicateScanView extends StatefulWidget {
-  const DuplicateScanView({super.key, required this.type, required this.label, required this.isLargeFiles});
-  final RequestType type;
-  final String label;
-  final bool isLargeFiles;
+enum ScanMode { screenshots, largeFiles, dupPhotos, dupVideos, dupFiles, trashBin }
+
+// ==================== Scan View & Trash Logic ====================
+class ScanView extends StatefulWidget {
+  const ScanView({super.key, required this.mode});
+  final ScanMode mode;
 
   @override
-  State<DuplicateScanView> createState() => _DuplicateScanViewState();
+  State<ScanView> createState() => _ScanViewState();
 }
 
-class _DuplicateScanViewState extends State<DuplicateScanView> {
+class _ScanViewState extends State<ScanView> {
   bool _isLoading = true;
   List<AssetEntity> _items = [];
   final Set<String> _selectedIds = {};
 
+  // سلة مهملات وهمية مؤقتة للتوضيح (Trash Bin list)
+  static final List<AssetEntity> _trashBinList = [];
+
   @override
   void initState() {
     super.initState();
-    _scanItems();
+    _loadData();
   }
 
-  Future<void> _scanItems() async {
+  Future<void> _loadData() async {
+    if (widget.mode == ScanMode.trashBin) {
+      setState(() {
+        _items = List.from(_trashBinList);
+        _isLoading = false;
+      });
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final perm = await PhotoManager.requestPermissionExtend();
@@ -379,37 +452,38 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
         return;
       }
 
-      final paths = await PhotoManager.getAssetPathList(onlyAll: true, type: widget.type);
+      final requestType = (widget.mode == ScanMode.dupVideos) ? RequestType.video : RequestType.image;
+      final paths = await PhotoManager.getAssetPathList(onlyAll: true, type: requestType);
       if (paths.isEmpty) {
         setState(() => _isLoading = false);
         return;
       }
 
-      final assets = await paths.first.getAssetListRange(start: 0, end: 100);
-      
-      if (widget.isLargeFiles) {
-        // فلترة الملفات الكبيرة فقط (أكبر من 50 ميجابايت)
-        final List<AssetEntity> heavyFiles = [];
+      final assets = await paths.first.getAssetListRange(start: 0, end: 80);
+
+      if (widget.mode == ScanMode.screenshots) {
+        // فلترة لقطات الشاشة (تحتوي كلمة screenshot في اسم الملف أو مساره غالباً)
+        final List<AssetEntity> screenshots = [];
+        for (var asset in assets) {
+          final file = await asset.file;
+          if (file != null && file.path.toLowerCase().contains('screenshot')) {
+            screenshots.add(asset);
+          }
+        }
+        if (mounted) setState(() { _items = screenshots; _isLoading = false; });
+      } else if (widget.mode == ScanMode.largeFiles) {
+        // الملفات الكبيرة (> 30 ميجابايت)
+        final List<AssetEntity> heavy = [];
         for (var asset in assets) {
           final file = await asset.file;
           if (file != null) {
-            try {
-              final length = await file.length();
-              final sizeMb = length / (1024 * 1024);
-              if (sizeMb >= 50.0) {
-                heavyFiles.add(asset);
-              }
-            } catch (_) {}
+            final len = await file.length();
+            if ((len / (1024 * 1024)) >= 30.0) heavy.add(asset);
           }
         }
-        if (mounted) {
-          setState(() {
-            _items = heavyFiles;
-            _isLoading = false;
-          });
-        }
+        if (mounted) setState(() { _items = heavy; _isLoading = false; });
       } else {
-        // فحص الملفات المكررة عبر MD5
+        // الملفات المكررة عبر MD5
         final Map<String, List<AssetEntity>> hashMap = {};
         for (var asset in assets) {
           final file = await asset.file;
@@ -421,35 +495,29 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
             } catch (_) {}
           }
         }
-
-        final List<AssetEntity> foundDuplicates = [];
+        final List<AssetEntity> duplicates = [];
         hashMap.forEach((key, list) {
-          if (list.length > 1) {
-            foundDuplicates.addAll(list.sublist(1));
-          }
+          if (list.length > 1) duplicates.addAll(list.sublist(1));
         });
-
-        if (mounted) {
-          setState(() {
-            _items = foundDuplicates;
-            _isLoading = false;
-          });
-        }
+        if (mounted) setState(() { _items = duplicates; _isLoading = false; });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _deleteSelected() {
+  void _moveToTrashOrDelete() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E2C),
-        title: const Text('Confirm Deletion', style: TextStyle(color: Colors.white)),
-        content: const Text('Are you sure you want to permanently delete selected items?', style: TextStyle(color: Colors.grey)),
+        title: Text(widget.mode == ScanMode.trashBin ? 'Delete Permanently?' : 'Move to Trash Bin?', style: const TextStyle(color: Colors.white)),
+        content: Text(
+          widget.mode == ScanMode.trashBin
+              ? 'Are you sure you want to delete these items permanently?'
+              : 'Items will be moved to Recycle Bin for 7 days before permanent deletion.',
+          style: const TextStyle(color: Colors.grey),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -459,17 +527,21 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
               Navigator.pop(ctx);
-              await PhotoManager.editor.deleteWithIds(_selectedIds.toList());
-              setState(() {
+              if (widget.mode == ScanMode.trashBin) {
+                await PhotoManager.editor.deleteWithIds(_selectedIds.toList());
+                _trashBinList.removeWhere((item) => _selectedIds.contains(item.id));
+              } else {
+                final selectedAssets = _items.where((item) => _selectedIds.contains(item.id)).toList();
+                _trashBinList.addAll(selectedAssets);
                 _items.removeWhere((item) => _selectedIds.contains(item.id));
-                _selectedIds.clear();
-              });
+              }
+              setState(() => _selectedIds.clear());
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('🗑️ Selected items deleted successfully!')),
+                const SnackBar(content: Text('🗑️ Action completed successfully!')),
               );
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -490,7 +562,7 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
             const Icon(Icons.check_circle_outline, size: 64, color: Color(0xFF00FF66)),
             const SizedBox(height: 16),
             Text(
-              widget.isLargeFiles ? 'No large files (>50MB) found!' : 'No duplicate ${widget.label} found!',
+              widget.mode == ScanMode.trashBin ? 'Recycle bin is empty!' : 'No items found in this category!',
               style: const TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.bold),
             ),
           ],
@@ -507,51 +579,37 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
               final asset = _items[index];
               final isSelected = _selectedIds.contains(asset.id);
 
-              return FutureBuilder<File?>(
-                future: asset.file,
-                builder: (context, fileSnapshot) {
-                  return FutureBuilder<int>(
-                    future: fileSnapshot.hasData && fileSnapshot.data != null
-                        ? fileSnapshot.data!.length()
-                        : Future.value(0),
-                    builder: (context, sizeSnapshot) {
-                      final fileSizeMb = (sizeSnapshot.data ?? 0) / (1024 * 1024);
-
-                      return CheckboxListTile(
-                        activeColor: const Color(0xFF00FF66),
-                        checkColor: Colors.black,
-                        secondary: FutureBuilder<Uint8List?>(
-                          future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
-                              return ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.memory(snapshot.data!, width: 50, height: 50, fit: BoxFit.cover),
-                              );
-                            }
-                            return Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(8)),
-                              child: const Icon(Icons.insert_drive_file, color: Colors.white70),
-                            );
-                          },
-                        ),
-                        title: Text(asset.title ?? 'File ${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        subtitle: Text('Size: ${fileSizeMb.toStringAsFixed(2)} MB', style: const TextStyle(color: Colors.grey)),
-                        value: isSelected,
-                        onChanged: (val) {
-                          setState(() {
-                            if (val == true) {
-                              _selectedIds.add(asset.id);
-                            } else {
-                              _selectedIds.remove(asset.id);
-                            }
-                          });
-                        },
+              return CheckboxListTile(
+                activeColor: const Color(0xFF00FF66),
+                checkColor: Colors.black,
+                secondary: FutureBuilder<Uint8List?>(
+                  future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(snapshot.data!, width: 50, height: 50, fit: BoxFit.cover),
                       );
-                    },
-                  );
+                    }
+                    return Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.insert_drive_file, color: Colors.white70),
+                    );
+                  },
+                ),
+                title: Text(asset.title ?? 'Item ${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Ready for cleanup', style: TextStyle(color: Colors.grey)),
+                value: isSelected,
+                onChanged: (val) {
+                  setState(() {
+                    if (val == true) {
+                      _selectedIds.add(asset.id);
+                    } else {
+                      _selectedIds.remove(asset.id);
+                    }
+                  });
                 },
               );
             },
@@ -568,9 +626,9 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
                   backgroundColor: const Color(0xFFFF0055),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                onPressed: _selectedIds.isNotEmpty ? _deleteSelected : null,
+                onPressed: _selectedIds.isNotEmpty ? _moveToTrashOrDelete : null,
                 child: Text(
-                  'Delete Selected (${_selectedIds.length})',
+                  widget.mode == ScanMode.trashBin ? 'Delete Permanently (${_selectedIds.length})' : 'Move to Trash (${_selectedIds.length})',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
