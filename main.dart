@@ -52,7 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
+
+    if (messenger == null) {
+      return;
+    }
 
     messenger.showSnackBar(
       SnackBar(
@@ -62,8 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _boostRam() async {
+  Future<void> _boostRam() async {
     if (!mounted) return;
+
     setState(() => _isBoosting = true);
 
     await Future.delayed(const Duration(seconds: 2));
@@ -78,8 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _showMessage('RAM Boosted Successfully!', Colors.green);
   }
 
-  void _cleanCache() async {
+  Future<void> _cleanCache() async {
     if (!mounted) return;
+
     setState(() => _isCleaningCache = true);
 
     await Future.delayed(const Duration(seconds: 2));
@@ -212,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 value: _autoCleanerEnabled,
                 onChanged: (value) {
                   setState(() => _autoCleanerEnabled = value);
+
                   _showMessage(
                     value ? 'Auto-Cleaner Enabled' : 'Auto-Cleaner Disabled',
                     const Color(0xFF00FF66),
