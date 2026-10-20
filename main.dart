@@ -110,6 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Status Card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -174,8 +175,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 24),
             const Text(
-              '🔥 SMART DUPLICATE CLEANERS',
+              '🔥 SMART CLEANERS & DUPLICATES',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 12),
+            
+            // زر الملفات الكبيرة الجديد
+            _buildCleanerCard(
+              title: 'Large Files Cleaner',
+              subtitle: 'Find & remove heavy files larger than 50MB',
+              icon: Icons.sd_storage,
+              color: const Color(0xFFFF3366),
+              onTap: () => _openDuplicatesHub(4),
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
@@ -206,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: 'Duplicate Files & Apps',
               subtitle: 'Clear repeated documents and APK packages',
               icon: Icons.folder_copy,
-              color: const Color(0xFFFF0055),
+              color: const Color(0xFF00E5FF),
               onTap: () => _openDuplicatesHub(3),
             ),
           ],
@@ -294,7 +305,7 @@ class _DuplicatesHubScreenState extends State<DuplicatesHubScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
+    _tabController = TabController(length: 5, vsync: this, initialIndex: widget.initialTab);
   }
 
   @override
@@ -307,7 +318,7 @@ class _DuplicatesHubScreenState extends State<DuplicatesHubScreen> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Duplicate Cleaner Hub', style: TextStyle(color: Color(0xFF00FF66))),
+        title: const Text('Cleaner Hub', style: TextStyle(color: Color(0xFF00FF66))),
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -319,27 +330,30 @@ class _DuplicatesHubScreenState extends State<DuplicatesHubScreen> with SingleTi
             Tab(text: 'Videos'),
             Tab(text: 'Audio'),
             Tab(text: 'Files'),
+            Tab(text: 'Large Files'), // التبويب الجديد للملفات الكبيرة
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: const [
-          DuplicateScanView(type: RequestType.image, label: 'Photos'),
-          DuplicateScanView(type: RequestType.video, label: 'Videos'),
-          DuplicateScanView(type: RequestType.audio, label: 'Audio'),
-          DuplicateScanView(type: RequestType.common, label: 'Files'),
+          DuplicateScanView(type: RequestType.image, label: 'Photos', isLargeFiles: false),
+          DuplicateScanView(type: RequestType.video, label: 'Videos', isLargeFiles: false),
+          DuplicateScanView(type: RequestType.audio, label: 'Audio', isLargeFiles: false),
+          DuplicateScanView(type: RequestType.common, label: 'Files', isLargeFiles: false),
+          DuplicateScanView(type: RequestType.common, label: 'Large Files', isLargeFiles: true),
         ],
       ),
     );
   }
 }
 
-// ==================== Duplicate Scan View ====================
+// ==================== Scan & Clean View ====================
 class DuplicateScanView extends StatefulWidget {
-  const DuplicateScanView({super.key, required this.type, required this.label});
+  const DuplicateScanView({super.key, required this.type, required this.label, required this.isLargeFiles});
   final RequestType type;
   final String label;
+  final bool isLargeFiles;
 
   @override
   State<DuplicateScanView> createState() => _DuplicateScanViewState();
@@ -347,16 +361,16 @@ class DuplicateScanView extends StatefulWidget {
 
 class _DuplicateScanViewState extends State<DuplicateScanView> {
   bool _isLoading = true;
-  List<AssetEntity> _duplicates = [];
+  List<AssetEntity> _items = [];
   final Set<String> _selectedIds = {};
 
   @override
   void initState() {
     super.initState();
-    _scanDuplicates();
+    _scanItems();
   }
 
-  Future<void> _scanDuplicates() async {
+  Future<void> _scanItems() async {
     setState(() => _isLoading = true);
     try {
       final perm = await PhotoManager.requestPermissionExtend();
@@ -371,32 +385,56 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
         return;
       }
 
-      final assets = await paths.first.getAssetListRange(start: 0, end: 50);
-      final Map<String, List<AssetEntity>> hashMap = {};
-
-      for (var asset in assets) {
-        final file = await asset.file;
-        if (file != null) {
-          try {
-            final bytes = await file.readAsBytes();
-            final digest = md5.convert(bytes).toString();
-            hashMap.putIfAbsent(digest, () => []).add(asset);
-          } catch (_) {}
+      final assets = await paths.first.getAssetListRange(start: 0, end: 100);
+      
+      if (widget.isLargeFiles) {
+        // فلترة الملفات الكبيرة فقط (أكبر من 50 ميجابايت)
+        final List<AssetEntity> heavyFiles = [];
+        for (var asset in assets) {
+          final file = await asset.file;
+          if (file != null) {
+            try {
+              final length = await file.length();
+              final sizeMb = length / (1024 * 1024);
+              if (sizeMb >= 50.0) {
+                heavyFiles.add(asset);
+              }
+            } catch (_) {}
+          }
         }
-      }
-
-      final List<AssetEntity> foundDuplicates = [];
-      hashMap.forEach((key, list) {
-        if (list.length > 1) {
-          foundDuplicates.addAll(list.sublist(1));
+        if (mounted) {
+          setState(() {
+            _items = heavyFiles;
+            _isLoading = false;
+          });
         }
-      });
+      } else {
+        // فحص الملفات المكررة عبر MD5
+        final Map<String, List<AssetEntity>> hashMap = {};
+        for (var asset in assets) {
+          final file = await asset.file;
+          if (file != null) {
+            try {
+              final bytes = await file.readAsBytes();
+              final digest = md5.convert(bytes).toString();
+              hashMap.putIfAbsent(digest, () => []).add(asset);
+            } catch (_) {}
+          }
+        }
 
-      if (mounted) {
-        setState(() {
-          _duplicates = foundDuplicates;
-          _isLoading = false;
+        final List<AssetEntity> foundDuplicates = [];
+        hashMap.forEach((key, list) {
+          if (list.length > 1) {
+            foundDuplicates.addAll(list.sublist(1));
+          }
         });
+
+        if (mounted) {
+          setState(() {
+            _items = foundDuplicates;
+            _isLoading = false;
+          });
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -423,12 +461,12 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
               Navigator.pop(ctx);
               await PhotoManager.editor.deleteWithIds(_selectedIds.toList());
               setState(() {
-                _duplicates.removeWhere((item) => _selectedIds.contains(item.id));
+                _items.removeWhere((item) => _selectedIds.contains(item.id));
                 _selectedIds.clear();
               });
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('🗑️ Selected duplicates deleted successfully!')),
+                const SnackBar(content: Text('🗑️ Selected items deleted successfully!')),
               );
             },
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -444,7 +482,7 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF66)));
     }
 
-    if (_duplicates.isEmpty) {
+    if (_items.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -452,7 +490,7 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
             const Icon(Icons.check_circle_outline, size: 64, color: Color(0xFF00FF66)),
             const SizedBox(height: 16),
             Text(
-              'No duplicate ${widget.label} found!',
+              widget.isLargeFiles ? 'No large files (>50MB) found!' : 'No duplicate ${widget.label} found!',
               style: const TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.bold),
             ),
           ],
@@ -464,9 +502,9 @@ class _DuplicateScanViewState extends State<DuplicateScanView> {
       children: [
         Expanded(
           child: ListView.builder(
-            itemCount: _duplicates.length,
+            itemCount: _items.length,
             itemBuilder: (context, index) {
-              final asset = _duplicates[index];
+              final asset = _items[index];
               final isSelected = _selectedIds.contains(asset.id);
 
               return FutureBuilder<File?>(
