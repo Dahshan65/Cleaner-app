@@ -152,8 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
                   Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'RAM: ${_ramUsage.toStringAsFixed(1)}%',
@@ -416,6 +415,176 @@ class _HomeScreenState extends State<HomeScreen> {
           color: color,
         ),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class CleanerHubScreen extends StatefulWidget {
+  final int initialTab;
+
+  const CleanerHubScreen({
+    super.key,
+    this.initialTab = 0,
+  });
+
+  @override
+  State<CleanerHubScreen> createState() => _CleanerHubScreenState();
+}
+
+class _CleanerHubScreenState extends State<CleanerHubScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  final List<String> _tabs = [
+    'Screenshot Cleaner',
+    'Large Files',
+    'Duplicate Photos',
+    'Duplicate Videos',
+    'Trash',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(
+      length: _tabs.length,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, _tabs.length - 1),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cleaner Hub'),
+        backgroundColor: Colors.transparent,
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          labelColor: const Color(0xFF00FF66),
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: const Color(0xFF00FF66),
+          tabs: _tabs
+              .map((tab) => Tab(
+                    text: tab,
+                  ))
+              .toList(),
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildTabPage(
+            title: 'Screenshot Cleaner',
+            message: 'Scan screenshots and remove unwanted captures.',
+            icon: Icons.camera_alt,
+            color: const Color(0xFF00FFCC),
+          ),
+          _buildTabPage(
+            title: 'Large Files (>10MB)',
+            message: 'Find oversized files taking up unnecessary space.',
+            icon: Icons.sd_storage,
+            color: const Color(0xFFFF3366),
+          ),
+          _buildTabPage(
+            title: 'Duplicate Photos',
+            message: 'Detect duplicate images and clean them safely.',
+            icon: Icons.photo_library,
+            color: const Color(0xFFFF9900),
+          ),
+          _buildTabPage(
+            title: 'Duplicate Videos',
+            message: 'Locate duplicate videos and save storage.',
+            icon: Icons.video_library,
+            color: const Color(0xFF9900FF),
+          ),
+          _buildTabPage(
+            title: 'Recycle Bin (Trash)',
+            message: 'View files waiting for permanent deletion.',
+            icon: Icons.delete_sweep,
+            color: Colors.grey,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabPage({
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131822),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: color.withOpacity(0.35),
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, size: 48, color: color),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('$title scan started'),
+                    backgroundColor: color,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.search),
+              label: const Text('Scan Now'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
