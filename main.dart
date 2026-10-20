@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -213,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
-              title: 'Large Files (>15MB)',
+              title: 'Large Files (>10MB)',
               subtitle: 'Find & remove heavy files easily',
               icon: Icons.sd_storage,
               color: const Color(0xFFFF3366),
@@ -373,7 +372,7 @@ class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerPr
 
 enum ScanMode { screenshots, largeFiles, dupPhotos, dupVideos, trashBin }
 
-// ==================== Accurate Scan View ====================
+// ==================== High-Speed Scan View ====================
 class ScanView extends StatefulWidget {
   const ScanView({super.key, required this.mode});
   final ScanMode mode;
@@ -412,12 +411,11 @@ class _ScanViewState extends State<ScanView> {
         return;
       }
 
-      // تحديد نوع الأصول بناءً على وضع الفحص
       RequestType reqType = RequestType.image;
-      if (widget.mode == ScanMode.dupVideos) {
-        reqType = RequestType.video;
+      if (widget.mode == ScanMode.dupVideos || widget.mode == ScanMode.screenshots) {
+        reqType = widget.mode == ScanMode.dupVideos ? RequestType.video : RequestType.image;
       } else if (widget.mode == ScanMode.largeFiles) {
-        reqType = RequestType.all; // فحص الصور والفيديوهات الكبيرة معاً
+        reqType = RequestType.all;
       }
 
       final paths = await PhotoManager.getAssetPathList(onlyAll: true, type: reqType);
@@ -426,8 +424,8 @@ class _ScanViewState extends State<ScanView> {
         return;
       }
 
-      // جلب العناصر (حتى 200 عنصراً لضمان السرعة والدقة)
-      final assets = await paths.first.getAssetListRange(start: 0, end: 200);
+      // جلب حتى 300 عنصراً
+      final assets = await paths.first.getAssetListRange(start: 0, end: 300);
 
       if (widget.mode == ScanMode.screenshots) {
         final List<AssetEntity> screenshots = [];
@@ -442,14 +440,14 @@ class _ScanViewState extends State<ScanView> {
         }
         if (mounted) setState(() { _items = screenshots; _isLoading = false; });
       } else if (widget.mode == ScanMode.largeFiles) {
+        // فحص الملفات الكبيرة (أكبر من 10 ميجابايت)
         final List<AssetEntity> heavyFiles = [];
         for (var asset in assets) {
           final file = await asset.file;
           if (file != null) {
             try {
               final len = await file.length();
-              // الملفات الأكبر من 15 ميجابايت
-              if ((len / (1024 * 1024)) >= 15.0) {
+              if ((len / (1024 * 1024)) >= 10.0) {
                 heavyFiles.add(asset);
               }
             } catch (_) {}
@@ -457,36 +455,29 @@ class _ScanViewState extends State<ScanView> {
         }
         if (mounted) setState(() { _items = heavyFiles; _isLoading = false; });
       } else {
-        // فحص مكرر حقيقي ودقيق باستخدام بصمة المحتوى MD5 أو مطابقة الحجم الدقيق
-        final Map<String, List<AssetEntity>> hashGroups = {};
+        // خوارزمية ذكية وسريعة للصور أو الفيديوهات المكررة تعتمد على حجم الملف بالبايت
+        final Map<int, List<AssetEntity>> sizeGroups = {};
         for (var asset in assets) {
           final file = await asset.file;
           if (file != null) {
             try {
-              final bytes = await file.readAsBytes();
-              // حساب بصمة محتوى الملف الفعلي (MD5) لضمان مطابقة النسخ الأصلية تماماً
-              final fileHash = md5.convert(bytes).toString();
-              hashGroups.putIfAbsent(fileHash, () => []).add(asset);
-            } catch (_) {
-              // احتياطي في حال فشل قراءة الbytes: الاعتماد على الحجم بالبايت
-              try {
-                final len = await file.length();
-                final fallbackKey = 'size_$len';
-                hashGroups.putIfAbsent(fallbackKey, () => []).add(asset);
-              } catch (_) {}
-            }
+              final length = await file.length();
+              if (length > 0) {
+                sizeGroups.putIfAbsent(length, () => []).add(asset);
+              }
+            } catch (_) {}
           }
         }
 
-        final List<AssetEntity> foundDuplicates = [];
-        hashGroups.forEach((key, list) {
+        final List<AssetEntity> duplicates = [];
+        sizeGroups.forEach((size, list) {
           if (list.length > 1) {
-            // الاحتفاظ بأول نسخة وإضافة النسخ المكررة الأخرى لقائمة التنظيف
-            foundDuplicates.addAll(list.sublist(1));
+            // إضافة النسخ المتطابقة بالحجم لقائمة الحذف
+            duplicates.addAll(list.sublist(1));
           }
         });
 
-        if (mounted) setState(() { _items = foundDuplicates; _isLoading = false; });
+        if (mounted) setState(() { _items = duplicates; _isLoading = false; });
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
