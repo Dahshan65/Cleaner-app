@@ -213,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
-              title: 'Large Files (>20MB)',
+              title: 'Large Files (>15MB)',
               subtitle: 'Find & remove heavy files easily',
               icon: Icons.sd_storage,
               color: const Color(0xFFFF3366),
@@ -373,7 +373,7 @@ class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerPr
 
 enum ScanMode { screenshots, largeFiles, dupPhotos, dupVideos, trashBin }
 
-// ==================== Robust Scan View ====================
+// ==================== Accurate Scan View ====================
 class ScanView extends StatefulWidget {
   const ScanView({super.key, required this.mode});
   final ScanMode mode;
@@ -412,67 +412,81 @@ class _ScanViewState extends State<ScanView> {
         return;
       }
 
-      // تحديد نوع جلب الأصول (الصور أو الفيديوهات بشكل شامل لجميع الألبومات)
-      final requestType = (widget.mode == ScanMode.dupVideos) ? RequestType.video : RequestType.image;
-      final paths = await PhotoManager.getAssetPathList(onlyAll: false, type: requestType);
-      
-      List<AssetEntity> allAssets = [];
-      for (var path in paths) {
-        final list = await path.getAssetListRange(start: 0, end: 500);
-        allAssets.addAll(list);
+      // تحديد نوع الأصول بناءً على وضع الفحص
+      RequestType reqType = RequestType.image;
+      if (widget.mode == ScanMode.dupVideos) {
+        reqType = RequestType.video;
+      } else if (widget.mode == ScanMode.largeFiles) {
+        reqType = RequestType.all; // فحص الصور والفيديوهات الكبيرة معاً
       }
+
+      final paths = await PhotoManager.getAssetPathList(onlyAll: true, type: reqType);
+      if (paths.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // جلب العناصر (حتى 200 عنصراً لضمان السرعة والدقة)
+      final assets = await paths.first.getAssetListRange(start: 0, end: 200);
 
       if (widget.mode == ScanMode.screenshots) {
         final List<AssetEntity> screenshots = [];
-        for (var asset in allAssets) {
+        for (var asset in assets) {
           final file = await asset.file;
           if (file != null) {
-            final pathLower = file.path.toLowerCase();
-            if (pathLower.contains('screenshot') || pathLower.contains('screen') || pathLower.contains('captures')) {
+            final p = file.path.toLowerCase();
+            if (p.contains('screenshot') || p.contains('screen') || p.contains('captures')) {
               screenshots.add(asset);
             }
           }
         }
         if (mounted) setState(() { _items = screenshots; _isLoading = false; });
       } else if (widget.mode == ScanMode.largeFiles) {
-        // فحص الملفات الكبيرة (أكبر من 20 ميجابايت للصور والفيديوهات)
-        final List<AssetEntity> heavy = [];
-        for (var asset in allAssets) {
+        final List<AssetEntity> heavyFiles = [];
+        for (var asset in assets) {
           final file = await asset.file;
           if (file != null) {
             try {
               final len = await file.length();
-              if ((len / (1024 * 1024)) >= 20.0) {
-                heavy.add(asset);
+              // الملفات الأكبر من 15 ميجابايت
+              if ((len / (1024 * 1024)) >= 15.0) {
+                heavyFiles.add(asset);
               }
             } catch (_) {}
           }
         }
-        if (mounted) setState(() { _items = heavy; _isLoading = false; });
+        if (mounted) setState(() { _items = heavyFiles; _isLoading = false; });
       } else {
-        // خوارزمية ذكية لاكتشاف الصور أو الفيديوهات المكررة (الحجم + الاسم أو محتوى MD5 للسريع)
-        final Map<String, List<AssetEntity>> map = {};
-        for (var asset in allAssets) {
+        // فحص مكرر حقيقي ودقيق باستخدام بصمة المحتوى MD5 أو مطابقة الحجم الدقيق
+        final Map<String, List<AssetEntity>> hashGroups = {};
+        for (var asset in assets) {
           final file = await asset.file;
           if (file != null) {
             try {
-              final length = await file.length();
-              final name = asset.title ?? 'file';
-              // بصمة فريدة تعتمد على اسم الملف وحجمه بالبايت
-              final signature = '${name}_$length';
-              map.putIfAbsent(signature, () => []).add(asset);
-            } catch (_) {}
+              final bytes = await file.readAsBytes();
+              // حساب بصمة محتوى الملف الفعلي (MD5) لضمان مطابقة النسخ الأصلية تماماً
+              final fileHash = md5.convert(bytes).toString();
+              hashGroups.putIfAbsent(fileHash, () => []).add(asset);
+            } catch (_) {
+              // احتياطي في حال فشل قراءة الbytes: الاعتماد على الحجم بالبايت
+              try {
+                final len = await file.length();
+                final fallbackKey = 'size_$len';
+                hashGroups.putIfAbsent(fallbackKey, () => []).add(asset);
+              } catch (_) {}
+            }
           }
         }
 
-        final List<AssetEntity> duplicates = [];
-        map.forEach((key, list) {
+        final List<AssetEntity> foundDuplicates = [];
+        hashGroups.forEach((key, list) {
           if (list.length > 1) {
-            duplicates.addAll(list.sublist(1));
+            // الاحتفاظ بأول نسخة وإضافة النسخ المكررة الأخرى لقائمة التنظيف
+            foundDuplicates.addAll(list.sublist(1));
           }
         });
 
-        if (mounted) setState(() { _items = duplicates; _isLoading = false; });
+        if (mounted) setState(() { _items = foundDuplicates; _isLoading = false; });
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
@@ -552,37 +566,51 @@ class _ScanViewState extends State<ScanView> {
               final asset = _items[index];
               final isSelected = _selectedIds.contains(asset.id);
 
-              return CheckboxListTile(
-                activeColor: const Color(0xFF00FF66),
-                checkColor: Colors.black,
-                secondary: FutureBuilder<Uint8List?>(
-                  future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(snapshot.data!, width: 50, height: 50, fit: BoxFit.cover),
+              return FutureBuilder<File?>(
+                future: asset.file,
+                builder: (context, fileSnapshot) {
+                  return FutureBuilder<int>(
+                    future: fileSnapshot.hasData && fileSnapshot.data != null
+                        ? fileSnapshot.data!.length()
+                        : Future.value(0),
+                    builder: (context, sizeSnapshot) {
+                      final fileSizeMb = (sizeSnapshot.data ?? 0) / (1024 * 1024);
+
+                      return CheckboxListTile(
+                        activeColor: const Color(0xFF00FF66),
+                        checkColor: Colors.black,
+                        secondary: FutureBuilder<Uint8List?>(
+                          future: asset.thumbnailDataWithSize(const ThumbnailSize(100, 100)),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(snapshot.data!, width: 50, height: 50, fit: BoxFit.cover),
+                              );
+                            }
+                            return Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(8)),
+                              child: const Icon(Icons.insert_drive_file, color: Colors.white70),
+                            );
+                          },
+                        ),
+                        title: Text(asset.title ?? 'Item ${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: Text('Size: ${fileSizeMb.toStringAsFixed(2)} MB', style: const TextStyle(color: Colors.grey)),
+                        value: isSelected,
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) {
+                              _selectedIds.add(asset.id);
+                            } else {
+                              _selectedIds.remove(asset.id);
+                            }
+                          });
+                        },
                       );
-                    }
-                    return Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.insert_drive_file, color: Colors.white70),
-                    );
-                  },
-                ),
-                title: Text(asset.title ?? 'Item ${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Ready for cleanup', style: TextStyle(color: Colors.grey)),
-                value: isSelected,
-                onChanged: (val) {
-                  setState(() {
-                    if (val == true) {
-                      _selectedIds.add(asset.id);
-                    } else {
-                      _selectedIds.remove(asset.id);
-                    }
-                  });
+                    },
+                  );
                 },
               );
             },
