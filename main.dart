@@ -1,12 +1,7 @@
-import 'dart:io';
-import 'dart:typed_data';
-
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
-final ValueNotifier<ThemeMode> themeNotifier =
-    ValueNotifier(ThemeMode.dark);
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
 void main() => runApp(const CyberCleanerApp());
 
@@ -21,10 +16,6 @@ class CyberCleanerApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Cyber Cleaner Ultimate',
-          builder: (context, child) => Directionality(
-            textDirection: TextDirection.ltr,
-            child: child!,
-          ),
           themeMode: currentThemeMode,
           theme: ThemeData(
             useMaterial3: true,
@@ -57,7 +48,22 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _autoCleanerEnabled = true;
   double _ramUsage = 74.2;
 
+  void _showMessage(String text, Color color) {
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: color,
+      ),
+    );
+  }
+
   void _boostRam() async {
+    if (!mounted) return;
     setState(() => _isBoosting = true);
 
     await Future.delayed(const Duration(seconds: 2));
@@ -69,15 +75,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _ramUsage = 38.5;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('RAM Boosted Successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    _showMessage('RAM Boosted Successfully!', Colors.green);
   }
 
   void _cleanCache() async {
+    if (!mounted) return;
     setState(() => _isCleaningCache = true);
 
     await Future.delayed(const Duration(seconds: 2));
@@ -86,15 +88,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() => _isCleaningCache = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Cache cleaning simulation completed.'),
-        backgroundColor: Colors.blueAccent,
-      ),
-    );
+    _showMessage('Cache cleaning simulation completed.', Colors.blueAccent);
   }
 
   void _openHub(int index) {
+    if (!mounted) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -117,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: SafeArea(
         child: ListView(
@@ -186,10 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 20),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFF131822),
                 borderRadius: BorderRadius.circular(16),
@@ -215,15 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 value: _autoCleanerEnabled,
                 onChanged: (value) {
                   setState(() => _autoCleanerEnabled = value);
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        value
-                            ? 'Auto-Cleaner Enabled'
-                            : 'Auto-Cleaner Disabled',
-                      ),
-                    ),
+                  _showMessage(
+                    value ? 'Auto-Cleaner Enabled' : 'Auto-Cleaner Disabled',
+                    const Color(0xFF00FF66),
                   );
                 },
               ),
@@ -276,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildCleanerCard(
               title: 'Screenshot Cleaner',
               subtitle: 'Scan screenshots',
-              icon: Icons.camera,
+              icon: Icons.camera_alt,
               color: const Color(0xFF00FFCC),
               onTap: () => _openHub(0),
             ),
@@ -382,10 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -466,17 +454,14 @@ class _CleanerHubScreenState extends State<CleanerHubScreen>
       appBar: AppBar(
         title: const Text('Cleaner Hub'),
         backgroundColor: Colors.transparent,
+        elevation: 0,
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
           labelColor: const Color(0xFF00FF66),
           unselectedLabelColor: Colors.grey,
           indicatorColor: const Color(0xFF00FF66),
-          tabs: _tabs
-              .map((tab) => Tab(
-                    text: tab,
-                  ))
-              .toList(),
+          tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
         ),
       ),
       body: TabBarView(
@@ -565,7 +550,7 @@ class _CleanerHubScreenState extends State<CleanerHubScreen>
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                   SnackBar(
                     content: Text('$title scan started'),
                     backgroundColor: color,
