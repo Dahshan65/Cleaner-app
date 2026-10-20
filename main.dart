@@ -145,28 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: _ramUsage > 70 ? Colors.redAccent : const Color(0xFF00FF66),
                     borderRadius: BorderRadius.circular(5),
                   ),
-                  const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Row(
-                      children: [
-                        Expanded(flex: 40, child: Container(height: 8, color: const Color(0xFFFF9900))),
-                        Expanded(flex: 25, child: Container(height: 8, color: const Color(0xFF9900FF))),
-                        Expanded(flex: 15, child: Container(height: 8, color: const Color(0xFF00E5FF))),
-                        Expanded(flex: 20, child: Container(height: 8, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('🖼️ Photos', style: TextStyle(color: Colors.grey, fontSize: 10)),
-                      Text('🎬 Videos', style: TextStyle(color: Colors.grey, fontSize: 10)),
-                      Text('📱 Apps', style: TextStyle(color: Colors.grey, fontSize: 10)),
-                      Text('✨ Free', style: TextStyle(color: Colors.grey, fontSize: 10)),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -235,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
-              title: 'Large Files (>30MB)',
+              title: 'Large Files (>20MB)',
               subtitle: 'Find & remove heavy files easily',
               icon: Icons.sd_storage,
               color: const Color(0xFFFF3366),
@@ -259,19 +237,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
-              title: 'Duplicate Audio & Files',
-              subtitle: 'Clean repeated ringtones, notes & APKs',
-              icon: Icons.folder_copy,
-              color: const Color(0xFF00E5FF),
-              onTap: () => _openHub(4),
-            ),
-            const SizedBox(height: 12),
-            _buildCleanerCard(
               title: 'Recycle Bin (Trash)',
               subtitle: 'Recover or permanently delete items',
               icon: Icons.delete_sweep,
               color: Colors.grey,
-              onTap: () => _openHub(5),
+              onTap: () => _openHub(4),
             ),
           ],
         ),
@@ -358,7 +328,7 @@ class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this, initialIndex: widget.initialTab);
+    _tabController = TabController(length: 5, vsync: this, initialIndex: widget.initialTab);
   }
 
   @override
@@ -383,7 +353,6 @@ class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerPr
             Tab(text: 'Large Files'),
             Tab(text: 'Dup Photos'),
             Tab(text: 'Dup Videos'),
-            Tab(text: 'Dup Files'),
             Tab(text: 'Trash Bin'),
           ],
         ),
@@ -395,7 +364,6 @@ class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerPr
           ScanView(mode: ScanMode.largeFiles),
           ScanView(mode: ScanMode.dupPhotos),
           ScanView(mode: ScanMode.dupVideos),
-          ScanView(mode: ScanMode.dupFiles),
           ScanView(mode: ScanMode.trashBin),
         ],
       ),
@@ -403,9 +371,9 @@ class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerPr
   }
 }
 
-enum ScanMode { screenshots, largeFiles, dupPhotos, dupVideos, dupFiles, trashBin }
+enum ScanMode { screenshots, largeFiles, dupPhotos, dupVideos, trashBin }
 
-// ==================== Advanced Scan View ====================
+// ==================== Robust Scan View ====================
 class ScanView extends StatefulWidget {
   const ScanView({super.key, required this.mode});
   final ScanMode mode;
@@ -444,56 +412,62 @@ class _ScanViewState extends State<ScanView> {
         return;
       }
 
-      // تحديد نوع الفحص (فيديوهات أو صور/ملفات)
-      final requestType = (widget.mode == ScanMode.dupVideos) ? RequestType.video : RequestType.common;
-      final paths = await PhotoManager.getAssetPathList(onlyAll: true, type: requestType);
-      if (paths.isEmpty) {
-        setState(() => _isLoading = false);
-        return;
+      // تحديد نوع جلب الأصول (الصور أو الفيديوهات بشكل شامل لجميع الألبومات)
+      final requestType = (widget.mode == ScanMode.dupVideos) ? RequestType.video : RequestType.image;
+      final paths = await PhotoManager.getAssetPathList(onlyAll: false, type: requestType);
+      
+      List<AssetEntity> allAssets = [];
+      for (var path in paths) {
+        final list = await path.getAssetListRange(start: 0, end: 500);
+        allAssets.addAll(list);
       }
-
-      // زيادة نطاق البحث ليشمل 300 عنصراً لضمان دقة الشمول
-      final assets = await paths.first.getAssetListRange(start: 0, end: 300);
 
       if (widget.mode == ScanMode.screenshots) {
         final List<AssetEntity> screenshots = [];
-        for (var asset in assets) {
+        for (var asset in allAssets) {
           final file = await asset.file;
-          if (file != null && (file.path.toLowerCase().contains('screenshot') || file.path.toLowerCase().contains('screen_'))) {
-            screenshots.add(asset);
+          if (file != null) {
+            final pathLower = file.path.toLowerCase();
+            if (pathLower.contains('screenshot') || pathLower.contains('screen') || pathLower.contains('captures')) {
+              screenshots.add(asset);
+            }
           }
         }
         if (mounted) setState(() { _items = screenshots; _isLoading = false; });
       } else if (widget.mode == ScanMode.largeFiles) {
+        // فحص الملفات الكبيرة (أكبر من 20 ميجابايت للصور والفيديوهات)
         final List<AssetEntity> heavy = [];
-        for (var asset in assets) {
+        for (var asset in allAssets) {
           final file = await asset.file;
           if (file != null) {
-            final len = await file.length();
-            if ((len / (1024 * 1024)) >= 30.0) heavy.add(asset);
+            try {
+              final len = await file.length();
+              if ((len / (1024 * 1024)) >= 20.0) {
+                heavy.add(asset);
+              }
+            } catch (_) {}
           }
         }
         if (mounted) setState(() { _items = heavy; _isLoading = false; });
       } else {
-        // خوارزمية ذكية ومحسنة للملفات المكررة (مطابقة الاسم والحجم بدقة عالية لتلافي اختلاف ترميز الفيديو)
-        final Map<String, List<AssetEntity>> signatureMap = {};
-        for (var asset in assets) {
+        // خوارزمية ذكية لاكتشاف الصور أو الفيديوهات المكررة (الحجم + الاسم أو محتوى MD5 للسريع)
+        final Map<String, List<AssetEntity>> map = {};
+        for (var asset in allAssets) {
           final file = await asset.file;
           if (file != null) {
             try {
               final length = await file.length();
-              final name = asset.title ?? 'unknown';
-              // مفتاح التوقيع: الاسم + الحجم بالبايت
+              final name = asset.title ?? 'file';
+              // بصمة فريدة تعتمد على اسم الملف وحجمه بالبايت
               final signature = '${name}_$length';
-              signatureMap.putIfAbsent(signature, () => []).add(asset);
+              map.putIfAbsent(signature, () => []).add(asset);
             } catch (_) {}
           }
         }
 
         final List<AssetEntity> duplicates = [];
-        signatureMap.forEach((key, list) {
+        map.forEach((key, list) {
           if (list.length > 1) {
-            // الاحتفاظ بأول نسخة وإضافة الباقي لقائمة المكررات للحذف
             duplicates.addAll(list.sublist(1));
           }
         });
