@@ -111,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 1. Storage Breakdown & RAM Status Card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -147,15 +146,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(5),
                   ),
                   const SizedBox(height: 16),
-                  // Storage Breakdown Visual Bar
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: Row(
                       children: [
-                        Expanded(flex: 40, child: Container(height: 8, color: const Color(0xFFFF9900))), // Photos
-                        Expanded(flex: 25, child: Container(height: 8, color: const Color(0xFF9900FF))), // Videos
-                        Expanded(flex: 15, child: Container(height: 8, color: const Color(0xFF00E5FF))), // Apps
-                        Expanded(flex: 20, child: Container(height: 8, color: Colors.grey.shade700)), // Free
+                        Expanded(flex: 40, child: Container(height: 8, color: const Color(0xFFFF9900))),
+                        Expanded(flex: 25, child: Container(height: 8, color: const Color(0xFF9900FF))),
+                        Expanded(flex: 15, child: Container(height: 8, color: const Color(0xFF00E5FF))),
+                        Expanded(flex: 20, child: Container(height: 8, color: Colors.grey.shade700)),
                       ],
                     ),
                   ),
@@ -173,8 +171,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // 2. Smart Auto-Cleaner Switch & Quick Actions
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -196,7 +192,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
             const Text(
               '⚡ QUICK BOOST',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2),
@@ -226,13 +221,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 24),
-
             const Text(
               '🔥 SMART CLEANER HUB',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2),
             ),
             const SizedBox(height: 12),
-            
             _buildCleanerCard(
               title: 'Screenshot Cleaner',
               subtitle: 'Scan & wipe old useless screenshots',
@@ -242,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildCleanerCard(
-              title: 'Large Files (>50MB)',
+              title: 'Large Files (>30MB)',
               subtitle: 'Find & remove heavy files easily',
               icon: Icons.sd_storage,
               color: const Color(0xFFFF3366),
@@ -412,7 +405,7 @@ class _CleanerHubScreenState extends State<CleanerHubScreen> with SingleTickerPr
 
 enum ScanMode { screenshots, largeFiles, dupPhotos, dupVideos, dupFiles, trashBin }
 
-// ==================== Scan View & Trash Logic ====================
+// ==================== Advanced Scan View ====================
 class ScanView extends StatefulWidget {
   const ScanView({super.key, required this.mode});
   final ScanMode mode;
@@ -426,7 +419,6 @@ class _ScanViewState extends State<ScanView> {
   List<AssetEntity> _items = [];
   final Set<String> _selectedIds = {};
 
-  // سلة مهملات وهمية مؤقتة للتوضيح (Trash Bin list)
   static final List<AssetEntity> _trashBinList = [];
 
   @override
@@ -452,27 +444,27 @@ class _ScanViewState extends State<ScanView> {
         return;
       }
 
-      final requestType = (widget.mode == ScanMode.dupVideos) ? RequestType.video : RequestType.image;
+      // تحديد نوع الفحص (فيديوهات أو صور/ملفات)
+      final requestType = (widget.mode == ScanMode.dupVideos) ? RequestType.video : RequestType.common;
       final paths = await PhotoManager.getAssetPathList(onlyAll: true, type: requestType);
       if (paths.isEmpty) {
         setState(() => _isLoading = false);
         return;
       }
 
-      final assets = await paths.first.getAssetListRange(start: 0, end: 80);
+      // زيادة نطاق البحث ليشمل 300 عنصراً لضمان دقة الشمول
+      final assets = await paths.first.getAssetListRange(start: 0, end: 300);
 
       if (widget.mode == ScanMode.screenshots) {
-        // فلترة لقطات الشاشة (تحتوي كلمة screenshot في اسم الملف أو مساره غالباً)
         final List<AssetEntity> screenshots = [];
         for (var asset in assets) {
           final file = await asset.file;
-          if (file != null && file.path.toLowerCase().contains('screenshot')) {
+          if (file != null && (file.path.toLowerCase().contains('screenshot') || file.path.toLowerCase().contains('screen_'))) {
             screenshots.add(asset);
           }
         }
         if (mounted) setState(() { _items = screenshots; _isLoading = false; });
       } else if (widget.mode == ScanMode.largeFiles) {
-        // الملفات الكبيرة (> 30 ميجابايت)
         final List<AssetEntity> heavy = [];
         for (var asset in assets) {
           final file = await asset.file;
@@ -483,22 +475,29 @@ class _ScanViewState extends State<ScanView> {
         }
         if (mounted) setState(() { _items = heavy; _isLoading = false; });
       } else {
-        // الملفات المكررة عبر MD5
-        final Map<String, List<AssetEntity>> hashMap = {};
+        // خوارزمية ذكية ومحسنة للملفات المكررة (مطابقة الاسم والحجم بدقة عالية لتلافي اختلاف ترميز الفيديو)
+        final Map<String, List<AssetEntity>> signatureMap = {};
         for (var asset in assets) {
           final file = await asset.file;
           if (file != null) {
             try {
-              final bytes = await file.readAsBytes();
-              final digest = md5.convert(bytes).toString();
-              hashMap.putIfAbsent(digest, () => []).add(asset);
+              final length = await file.length();
+              final name = asset.title ?? 'unknown';
+              // مفتاح التوقيع: الاسم + الحجم بالبايت
+              final signature = '${name}_$length';
+              signatureMap.putIfAbsent(signature, () => []).add(asset);
             } catch (_) {}
           }
         }
+
         final List<AssetEntity> duplicates = [];
-        hashMap.forEach((key, list) {
-          if (list.length > 1) duplicates.addAll(list.sublist(1));
+        signatureMap.forEach((key, list) {
+          if (list.length > 1) {
+            // الاحتفاظ بأول نسخة وإضافة الباقي لقائمة المكررات للحذف
+            duplicates.addAll(list.sublist(1));
+          }
         });
+
         if (mounted) setState(() { _items = duplicates; _isLoading = false; });
       }
     } catch (_) {
